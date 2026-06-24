@@ -1,0 +1,111 @@
+@import "tailwindcss";
+
+/* 
+  Styles personnalisés pour la Tower Garden.
+  Ajoute des animations et effets visuels pour donner vie à l'interface (micro-animations).
+*/
+
+@theme {
+  --color-border: #2e303a;
+}
+
+/* Base resets & styles de scrollbar premium */
+body {
+  background-color: #0b0f19; /* Fond sombre moderne */
+  color: #e2e8f0;
+  overflow-x: hidden;
+  font-family: 'Outfit', sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Animations pour le débit d'eau */
+@keyframes waterFlow {
+  0% {
+    stroke-dashoffset: 40;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-water-flow {
+  stroke-dasharray: 8, 4;
+  animation: waterFlow 1.5s linear infinite;
+}
+
+/* Effet de pulsation pour les capteurs d'eau actifs */
+@keyframes pulseWater {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+.animate-water-active {
+  animation: pulseWater 2s ease-in-out infinite;
+}
+
+/* Effet de lueur pulsée pour les LED */
+@keyframes ledGlow {
+  0%, 100% {
+    opacity: 0.7;
+    filter: drop-shadow(0 0 12px var(--glow-color, rgba(168, 85, 247, 0.4)));
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 25px var(--glow-color, rgba(168, 85, 247, 0.8)));
+  }
+}
+
+.animate-led-glow {
+  animation: ledGlow 3s ease-in-out infinite;
+}
+
+/* Animation de rotation subtile pour le ventilateur / la circulation d'air */
+@keyframes slowSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-slow-spin {
+  animation: slowSpin 10s linear infinite;
+}
+
+/* Effet de vague pour le réservoir */
+@keyframes waveMotion {
+  0%, 100% {
+    transform: translateY(0) scaleY(1);
+  }
+  50% {
+    transform: translateY(-4px) scaleY(1.02);
+  }
+}
+
+.animate-wave {
+  animation: waveMotion 4s ease-in-out infinite;
+}

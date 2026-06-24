@@ -1,0 +1,22 @@
+# Node / Frontend
+node_modules/
+dist/
+.env
+
+# .NET / Backend
+[Dd]ebug/
+[Rr]elease/
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDEs
+.vs/
+.vscode/
+.idea/
+
+# Local configuration
+appsettings.Development.json

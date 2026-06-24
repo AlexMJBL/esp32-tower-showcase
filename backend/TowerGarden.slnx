@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="TowerGarden.Application/TowerGarden.Application.csproj" />
+  <Project Path="TowerGarden.Domain/TowerGarden.Domain.csproj" />
+  <Project Path="TowerGarden.Infrastructure/TowerGarden.Infrastructure.csproj" />
+  <Project Path="TowerGarden.Tests/TowerGarden.Tests.csproj" />
+  <Project Path="TowerGarden.WebApi/TowerGarden.WebApi.csproj" />
+</Solution>
