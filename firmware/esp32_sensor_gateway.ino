@@ -19,8 +19,8 @@ int targetChannel = 11;
 #define SCL_PIN 19
 
 // Vos identifiants Wi-Fi
-const char* WIFI_SSID     = "JuiceWrld";
-const char* WIFI_PASSWORD = "Tesjulie1992";
+const char* WIFI_SSID     = "JuiceWrld-IOT";
+const char* WIFI_PASSWORD = "#Crz132!";
 
 // Clés d'accès Supabase Cloud
 const char* SUPABASE_URL  = "https://dulwyxrcjskexkbewjcp.supabase.co";
@@ -118,7 +118,7 @@ void scanAvailableNetworks() {
                         targetBSSID[0], targetBSSID[1], targetBSSID[2], targetBSSID[3], targetBSSID[4], targetBSSID[5]);
         }
         if (auth == WIFI_AUTH_WPA3_PSK) {
-          Serial.println("       >>> ATTENTION : 'JuiceWrld' est configuré en WPA3 strict ! L'ESP32 nécessite WPA2-PSK.");
+          Serial.printf("       >>> ATTENTION : '%s' est configuré en WPA3 strict ! L'ESP32 nécessite WPA2-PSK.\n", WIFI_SSID);
         }
       }
     }
