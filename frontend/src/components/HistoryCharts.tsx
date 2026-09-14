@@ -193,7 +193,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
       {/* Note d'information sous le graphique */}
       <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs text-slate-500">
         <span>Bande verte : Zone optimale agronomique (0.8 - 1.4 kPa)</span>
-        <span className="text-emerald-400/90 font-medium">Échantillonnage en continu (0$ / mois)</span>
+        <span className="text-emerald-400/90 font-medium">Échantillonnage en continu (Télémétrie active)</span>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { calculatePAR, LUX_TO_PPFD_FACTOR } from '../utils/agronomy';
 import type { ParResult } from '../utils/agronomy';
-import { Sun, Sparkles, Clock, Layers } from 'lucide-react';
+import { Sun, Sparkles, Clock, Layers, ShieldCheck } from 'lucide-react';
 
 interface LightSensorData {
   channel: number;
@@ -16,7 +16,7 @@ interface LightSpectrumCardProps {
 export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors }) => {
   const [photoperiod, setPhotoperiod] = useState<12 | 16 | 18>(16);
 
-  // Maximum d'échelle PPFD pour la jauge (ex: 800 µmol/m²/s pour un éclairage de serre)
+  // Maximum d'échelle PPFD pour la jauge
   const maxScalePpfd = 600;
 
   return (
@@ -37,10 +37,10 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
-                CRI 98+ (42W)
+                Barrina T8 5000K (CRI 98+)
               </span>
             </div>
-            <p className="text-xs text-slate-400">Conversion spectrale VEML7700 (facteur ×{LUX_TO_PPFD_FACTOR})</p>
+            <p className="text-xs text-slate-400">Spectre fixe non-ajustable (4x 42W V-Shape) · Facteur étalonné ×{LUX_TO_PPFD_FACTOR}</p>
           </div>
         </div>
 
@@ -84,7 +84,7 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
                 <span className="text-[10px] font-mono text-slate-500">Canal {s.channel}</span>
               </div>
 
-              {/* Valeurs principales : PPFD et Lux */}
+              {/* Valeurs principales : PPFD et Lux calculés */}
               <div className="flex items-baseline justify-between mb-2">
                 <div>
                   <span className="text-2xl font-black text-amber-400 tracking-tight">
@@ -116,10 +116,13 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
         })}
       </div>
 
-      {/* Note d'explication agronomique en bas */}
+      {/* Note d'étalonnage spectral fixe */}
       <div className="p-3 rounded-2xl bg-slate-950/40 border border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 relative z-10">
-        <span>Spectre spécifique calibré : <strong>Pic 450nm (Bleu) + 630-660nm (Rouge)</strong></span>
-        <span className="text-amber-400/90 font-mono font-medium">1 µmol/s/m² ≈ 66.7 Lux</span>
+        <div className="flex items-center gap-1.5">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Profil spectral fixe : <strong>Barrina T8 5000K (Pic 450nm + continu 500-680nm)</strong></span>
+        </div>
+        <span className="text-amber-400/90 font-mono font-medium">1 µmol/s/m² = 66.7 Lux</span>
       </div>
     </div>
   );

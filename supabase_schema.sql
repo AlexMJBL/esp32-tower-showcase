@@ -1,5 +1,5 @@
 -- ==============================================================================
--- SCHEMA SUPABASE : TOWER GARDEN / SHOWCASE IOT ($0.00 / MOIS)
+-- SCHEMA SUPABASE : TOWER GARDEN / SHOWCASE IOT
 -- Copiez-collez ce script dans l'éditeur SQL de votre dashboard Supabase.
 -- ==============================================================================
 

@@ -13,7 +13,7 @@
  *   - Canal 6 : Capteur de lumière VEML7700 #3 (Étage 2)
  *   - Canal 7 : Capteur de lumière VEML7700 #4 (Étage 1)
  *
- * Cloud ($0.00 / mois) :
+ * Cloud :
  * - Supabase REST API (HTTPS TLS 1.2 / 1.3 avec WiFiClientSecure)
  * - Envoi automatique toutes les 30 secondes
  * - Récupération et exécution des commandes admin sécurisées (avec Watchdog)
@@ -29,7 +29,7 @@
 #include <Adafruit_BMP280.h>
 #include <Adafruit_VEML7700.h>
 
-// 1. CONFIGURATION WI-FI & SUPABASE (0$/MOIS)
+// 1. CONFIGURATION WI-FI & SUPABASE
 const char* WIFI_SSID     = "VOTRE_WIFI_SSID";
 const char* WIFI_PASSWORD = "VOTRE_WIFI_PASSWORD";
 
@@ -40,14 +40,14 @@ const char* SUPABASE_KEY  = "votre-cle-anon-publique-ou-service-role";
 // Identifiant de l'appareil
 const char* DEVICE_ID     = "esp32-tower-1";
 
-// Intervalle d'échantillonnage (30 secondes = ~2880 requêtes/jour, bien en-dessous du quota gratuit)
+// Intervalle d'échantillonnage (30 secondes)
 const unsigned long TELEMETRY_INTERVAL_MS = 30000;
 unsigned long lastTelemetryTime = 0;
 
 // Adresse I2C du multiplexeur TCA9548A
 #define TCA9548A_ADDR 0x70
 
-// Broches Relais / Actionneurs
+// Broches Relais / Actionneurs (Réservées pour développement futur de l'irrigation)
 #define PIN_PUMP_RELAY  25
 #define PIN_LIGHT_PWM   26
 
@@ -111,7 +111,7 @@ float calculateVPD(float tempAir, float humPercent, float leafOffset = -1.5) {
 }
 
 /**
- * Facteur de conversion pour le spectre Full Spectrum CRI 98+ (42W)
+ * Facteur de conversion pour le spectre fixe Barrina T8 5000K (42W CRI 98+)
  * 1 µmol/(m²·s) ≈ 66.7 Lux  -> Facteur = 0.0150
  */
 float convertLuxToPPFD(float lux) {
@@ -251,7 +251,7 @@ void readAllSensors() {
 }
 
 // ==============================================================================
-// ENVOI DE LA TÉLÉMÉTRIE VERS SUPABASE (0$/MOIS VIA REST API HTTPS)
+// ENVOI DE LA TÉLÉMÉTRIE VERS SUPABASE (REST API HTTPS)
 // ==============================================================================
 void sendTelemetryToSupabase() {
   if (WiFi.status() != WL_CONNECTED) return;
@@ -379,7 +379,7 @@ void loop() {
     // 1. Lire tous les capteurs
     readAllSensors();
 
-    // 2. Transmettre à Supabase (PostgreSQL 0$/mois)
+    // 2. Transmettre à Supabase (PostgreSQL)
     sendTelemetryToSupabase();
 
     // 3. Vérifier les ordres de contrôle signés par l'Admin

@@ -16,7 +16,6 @@ import {
   Cpu, 
   LogOut, 
   LogIn, 
-  Lock, 
   TrendingUp,
   Sliders,
   ShieldCheck,
@@ -28,15 +27,6 @@ interface PumpDto {
   isActive: boolean;
   openDurationSeconds: number;
   openIntervalMinutes: number;
-}
-
-interface LightDto {
-  isOn: boolean;
-  red: number;
-  green: number;
-  blue: number;
-  startHour: number;
-  dailyDurationHours: number;
 }
 
 const BACKEND_URL = 'http://localhost:5013';
@@ -86,9 +76,8 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'live' | 'history' | 'controls' | 'logs'>('live');
   const [timeRange, setTimeRange] = useState<'1h' | '6h' | '24h' | '7d'>('24h');
 
-  // États de configuration de l'appareil
-  const [pump, setPump] = useState<PumpDto>({ isActive: false, openDurationSeconds: 60, openIntervalMinutes: 15 });
-  const [light, setLight] = useState<LightDto>({ isOn: true, red: 180, green: 70, blue: 240, startHour: 8, dailyDurationHours: 16 });
+  // Configuration prévisionnelle de l'irrigation
+  const [pump] = useState<PumpDto>({ isActive: false, openDurationSeconds: 60, openIntervalMinutes: 15 });
   
   // États des capteurs réels (Initialisés avec la trame fournie par l'utilisateur !)
   const [zoneReadings, setZoneReadings] = useState<ZoneSensorReading[]>([
@@ -148,7 +137,7 @@ export function App() {
 
   // 1. Initialisation des logs avec la trame exacte de l'ESP32
   useEffect(() => {
-    addLog("Système initialisé en mode Showcase Cloud (Coût: 0.00 $ / mois).", "sys");
+    addLog("Passerelle ESP32 initialisée - Télémétrie optique et climatique active.", "sys");
     addLog("[Canal 0] AHT20 | Temp: 26.8 C | Hum: 60.7 % | BMP: 27.6 C | Pression: 1003.5 hPa", "sensor");
     addLog("[Canal 1] AHT20 | Temp: 26.8 C | Hum: 63.1 % | BMP: 27.7 C | Pression: 1004.7 hPa", "sensor");
     addLog("[Canal 2] AHT20 | Temp: 26.8 C | Hum: 62.6 % | BMP: 27.5 C | Pression: 1002.8 hPa", "sensor");
@@ -203,39 +192,20 @@ export function App() {
     }
   }, []);
 
-  // 3. Commandes Matérielles sécurisées
-  const handlePumpUpdate = async (isActive: boolean, duration: number, interval: number) => {
-    if (!token) {
-      setIsLoginOpen(true);
-      return;
-    }
-    setPump({ isActive, openDurationSeconds: duration, openIntervalMinutes: interval });
-    addLog(`Commande Pompe envoyée [Signée JWT] : ${isActive ? 'ACTIVER' : 'ARRÊTER'} (${duration}s)`, 'command');
-  };
-
-  const handleLightUpdate = async (isOn: boolean, red: number, green: number, blue: number, startHour: number, duration: number) => {
-    if (!token) {
-      setIsLoginOpen(true);
-      return;
-    }
-    setLight({ isOn, red, green, blue, startHour, dailyDurationHours: duration });
-    addLog(`Commande Éclairage envoyée [Signée JWT] : ${isOn ? 'ON' : 'OFF'} (RGB: ${red},${green},${blue})`, 'command');
-  };
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
       
-      {/* BANNIÈRE SHOWCASE CLOUD 0$ / MOIS */}
-      <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/80 border-b border-emerald-500/20 px-4 py-2.5">
+      {/* BANNIÈRE SYSTÈME IOT & SPÉCIFICATIONS MATÉRIELLES */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-b border-slate-800 px-4 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="font-semibold text-emerald-300">Live IoT Showcase</span>
-            <span className="text-slate-400">|</span>
-            <span className="text-slate-300">ESP32 + TCA9548A + 3x (AHT20/BMP280) + 4x VEML7700</span>
+            <span className="font-semibold text-emerald-400">Télémétrie en Direct</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-300">ESP32 + TCA9548A · 3x Modules (AHT20/BMP280) · 4x Capteurs VEML7700</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -243,8 +213,9 @@ export function App() {
               <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
               <span className="font-medium">{connectionState}</span>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono font-bold">
-              Coût Cloud : 0,00 $ / mois
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-mono text-[11px] flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              Spectre Fixe : Barrina T8 5000K (CRI 98+)
             </span>
             {token ? (
               <span className="flex items-center gap-1 text-emerald-400 font-semibold">
@@ -307,7 +278,7 @@ export function App() {
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              Pilotage Matériel
+              Actionneurs & Matériel
             </button>
             <button
               onClick={() => setActiveTab('logs')}
@@ -408,36 +379,25 @@ export function App() {
           </div>
         )}
 
-        {/* ONGLET 3 : CONTRÔLE MATÉRIEL (POMPES & ÉCLAIRAGE) */}
+        {/* ONGLET 3 : ACTIONNEURS & ÉQUIPEMENTS (EN DÉVELOPPEMENT) */}
         {activeTab === 'controls' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            {!token && (
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3">
-                <Lock className="w-5 h-5 flex-shrink-0" />
-                <div className="text-xs">
-                  <strong>Mode Lecture Seule Démo :</strong> Vous pouvez visualiser les paramètres. Pour actionner les pompes ou modifier les cycles de lumière, connectez-vous avec le compte administrateur.
-                </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-emerald-400" />
+                  Gestion des Équipements & Actionneurs
+                </h2>
+                <p className="text-xs text-slate-500">Statut de l'éclairage horticole Barrina T8 et module d'irrigation</p>
               </div>
-            )}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <PumpControlCard 
-                isActive={pump.isActive}
-                isPumpRunning={waterSensors.isPumpRunning}
                 openDurationSeconds={pump.openDurationSeconds}
                 openIntervalMinutes={pump.openIntervalMinutes}
-                onUpdate={handlePumpUpdate}
-                readonly={!token}
               />
-              <LightControlCard 
-                isOn={light.isOn}
-                red={light.red}
-                green={light.green}
-                blue={light.blue}
-                startHour={light.startHour}
-                dailyDurationHours={light.dailyDurationHours}
-                onUpdate={handleLightUpdate}
-                readonly={!token}
-              />
+              <LightControlCard />
             </div>
           </div>
         )}

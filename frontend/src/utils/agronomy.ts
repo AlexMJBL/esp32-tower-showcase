@@ -111,9 +111,9 @@ export function calculateVPD(
 
 /**
  * Facteur de conversion Lux -> PPFD pour le spectre spécifique :
- * LED 42W Full Spectrum CRI 98+ (avec pic bleu 450nm + continu 500-680nm)
- * Ratio moyen mesuré : 1 µmol/(m²·s) ≈ 66.7 Lux
- * Soit un coefficient multiplicateur de 0.0150
+ * Lampe Horticole Barrina T8 4FT 5000K Daylight White (42W V-Shape, CRI 98+)
+ * Spectre fixe non-ajustable : pic bleu 450nm + plateau 520-660nm.
+ * Ratio étalonné : 1 µmol/(m²·s) ≈ 66.7 Lux -> Facteur = 0.0150
  */
 export const LUX_TO_PPFD_FACTOR = 0.0150;
 
