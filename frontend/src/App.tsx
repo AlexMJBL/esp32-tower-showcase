@@ -8,7 +8,6 @@ import { VpdGaugeCard } from './components/VpdGaugeCard';
 import { LightSpectrumCard } from './components/LightSpectrumCard';
 import { HistoryCharts } from './components/HistoryCharts';
 import { LanguageToggle } from './components/LanguageToggle';
-import { UsbConnectionButton } from './components/UsbConnectionButton';
 import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 import { supabase, isConfigured } from './lib/supabase';
 import type { TelemetryPoint } from './lib/supabase';
@@ -92,8 +91,7 @@ function MainDashboard() {
   const [historyData, setHistoryData] = useState<TelemetryPoint[]>(generateSeedHistory());
 
   // États de l'UI
-  const [isUsbConnected, setIsUsbConnected] = useState(false);
-  const [connectionState, setConnectionState] = useState<'Connecting' | 'Connected' | 'Live Showcase' | 'USB Direct (ESP32)'>('Live Showcase');
+  const [connectionState, setConnectionState] = useState<'Connecting' | 'Connected' | 'Live Showcase'>(isConfigured ? 'Connected' : 'Live Showcase');
   const [mqttLogs, setMqttLogs] = useState<{ id: string; time: string; text: string; type: 'sensor' | 'command' | 'sys' }[]>([]);
 
   // Utilitaire d'ajout de log
@@ -180,9 +178,6 @@ function MainDashboard() {
         supabase.removeChannel(channel);
       };
     } else {
-      // Si l'ESP32 est connecté en USB direct, la simulation est désactivée
-      if (isUsbConnected) return;
-
       // Simulation fluide pour la démonstration en ligne
       const interval = setInterval(() => {
         setZoneReadings(prev => prev.map(z => ({
@@ -193,7 +188,7 @@ function MainDashboard() {
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [language, isUsbConnected]);
+  }, [language]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
@@ -218,32 +213,8 @@ function MainDashboard() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            {/* Connexion Directe USB Série ESP32 */}
-            <UsbConnectionButton 
-              onZoneData={(channel, ahtTemp, ahtHum, bmpTemp, pressure) => {
-                setZoneReadings(prev => prev.map(z => z.channel === channel ? {
-                  ...z,
-                  ahtTemp,
-                  ahtHum,
-                  bmpTemp,
-                  pressure
-                } : z));
-              }}
-              onLightData={(channel, lux) => {
-                setLightSensors(prev => prev.map(s => s.channel === channel ? {
-                  ...s,
-                  lux
-                } : s));
-              }}
-              onLog={addLog}
-              onConnectionChange={(connected) => {
-                setIsUsbConnected(connected);
-                setConnectionState(connected ? 'USB Direct (ESP32)' : (isConfigured ? 'Connected' : 'Live Showcase'));
-              }}
-            />
-
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
-              <Radio className={`w-3 h-3 ${isUsbConnected ? 'text-cyan-400' : 'text-emerald-400'} animate-pulse`} />
+              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
               <span className="font-medium">
                 {connectionState === 'Live Showcase' ? t.nav.showcaseBadge : connectionState}
               </span>
