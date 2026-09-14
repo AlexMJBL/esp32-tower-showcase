@@ -12,8 +12,8 @@
 #define SDA_PIN 18
 #define SCL_PIN 19
 
-// Vos identifiants Wi-Fi (Point d'accès cellulaire)
-String activeSSID          = "JuiceWrld2";
+// Vos identifiants Wi-Fi validés
+const char* WIFI_SSID     = "JuiceWrld";
 const char* WIFI_PASSWORD = "Tesjulie1992";
 
 // Clés d'accès Supabase Cloud
@@ -70,98 +70,36 @@ float convertLuxToPPFD(float lux) {
   return lux * 0.0150;
 }
 
-// Nom lisible du protocole de sécurité Wi-Fi
-const char* getAuthModeName(wifi_auth_mode_t authMode) {
-  switch (authMode) {
-    case WIFI_AUTH_OPEN: return "Ouvert (Sans mot de passe)";
-    case WIFI_AUTH_WEP: return "WEP";
-    case WIFI_AUTH_WPA_PSK: return "WPA-PSK";
-    case WIFI_AUTH_WPA2_PSK: return "WPA2-PSK (Standard OK)";
-    case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2 Mixte";
-    case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2-Enterprise";
-    case WIFI_AUTH_WPA3_PSK: return "WPA3-PSK (Incompatible ESP32 pur !)";
-    default: return "Inconnu";
-  }
-}
-
-// Scan des réseaux 2.4 GHz pour diagnostic instantané
-void scanAvailableNetworks() {
-  Serial.println("\n[Diagnostic Wi-Fi] Scan des réseaux 2.4 GHz captés par l'ESP32...");
-  int n = WiFi.scanNetworks();
-  if (n == 0) {
-    Serial.println("  [!] Aucun réseau 2.4 GHz détecté à portée.");
-  } else {
-    Serial.printf("  -> %d réseaux trouvés :\n", n);
-    bool foundTarget = false;
-    for (int i = 0; i < n; ++i) {
-      String s = WiFi.SSID(i);
-      int32_t r = WiFi.RSSI(i);
-      int32_t ch = WiFi.channel(i);
-      wifi_auth_mode_t auth = WiFi.encryptionType(i);
-      Serial.printf("     * SSID: %-22s | Canal: %2d | Signal: %3d dBm | Sécurité: %s\n", 
-                    s.c_str(), ch, r, getAuthModeName(auth));
-
-      String sClean = s;
-      sClean.toLowerCase();
-      sClean.replace(" ", "");
-      if (sClean == "juicewrld2" || sClean == "juicewrld" || sClean.indexOf("juicewrld") >= 0) {
-        foundTarget = true;
-        activeSSID = s; // Capture le nom EXACT (avec ou sans espace) émis par le téléphone
-        Serial.printf("       >>> POINT D'ACCÈS IDENTIFIÉ : '%s' (%d dBm, Ch %d)\n", activeSSID.c_str(), r, ch);
-      }
-    }
-    if (foundTarget) {
-      Serial.printf("  [OK] Votre point d'accès '%s' est bien présent à portée en 2.4 GHz !\n", activeSSID.c_str());
-    } else {
-      Serial.printf("  [ALERTE] '%s' est introuvable en 2.4 GHz !\n", activeSSID.c_str());
-      Serial.println("  -> Si iPhone : Activez 'Maximiser la compatibilité' dans Réglages > Partage de connexion.");
-      Serial.println("  -> Si Android : Configurez le point d'accès sur la bande 2.4 GHz (pas 5 GHz).");
-      Serial.println("  -> Gardez l'écran du Partage de connexion ouvert sur le téléphone.");
-    }
-  }
-}
-
-// Connexion Wi-Fi avec réinitialisation propre vers le cellulaire
+// Connexion Wi-Fi simple et directe (identique à votre test réussi)
 void connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return;
+  Serial.println();
+  Serial.print("Connexion au reseau : ");
+  Serial.println(WIFI_SSID);
 
-  // Réinitialisation propre du contrôleur radio
-  WiFi.disconnect(true, true);
-  WiFi.mode(WIFI_OFF);
-  delay(250);
   WiFi.mode(WIFI_STA);
-  delay(250);
-  WiFi.setSleep(false);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-  Serial.printf("\n[Wi-Fi] Connexion au réseau '%s' (MAC ESP32: %s)...\n", activeSSID.c_str(), WiFi.macAddress().c_str());
-  WiFi.begin(activeSSID.c_str(), WIFI_PASSWORD);
-
-  unsigned long startAttempt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 20000) {
+  int retries = 0;
+  while (WiFi.status() != WL_CONNECTED && retries < 40) {
     delay(500);
     Serial.print(".");
+    retries++;
   }
 
+  Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[Wi-Fi] Connecté avec succès au cellulaire ! IP locale : %s | Signal : %d dBm\n", 
-                  WiFi.localIP().toString().c_str(), WiFi.RSSI());
+    Serial.println("=================================");
+    Serial.println("[OK] Connexion Wi-Fi reussie !");
+    Serial.print("Adresse IP : ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Signal RSSI : ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
+    Serial.println("=================================");
   } else {
-    wl_status_t st = WiFi.status();
-    Serial.print("\n[Wi-Fi Échec] ");
-    switch (st) {
-      case WL_NO_SSID_AVAIL:
-        Serial.printf("SSID INTROUVABLE ! L'antenne de l'ESP32 ne capte pas '%s'.\n", activeSSID.c_str());
-        break;
-      case WL_CONNECT_FAILED:
-        Serial.println("ÉCHEC AUTHENTIFICATION ! Mot de passe refusé par le cellulaire.");
-        break;
-      case WL_DISCONNECTED:
-        Serial.println("DÉCONNECTÉ (Délai d'attente dépassé).");
-        break;
-      default:
-        Serial.printf("Code d'état : %d\n", st);
-        break;
-    }
+    Serial.println("=================================");
+    Serial.println("[ATTENTION] Echec de connexion Wi-Fi.");
+    Serial.println("=================================");
   }
 }
 
@@ -264,8 +202,7 @@ void setup() {
     }
   }
 
-  // Scan et Connexion Wi-Fi
-  scanAvailableNetworks();
+  // Connexion Wi-Fi
   connectWiFi();
 
   Serial.println("\n--- FIN DU CHECK MATERIEL, DEBUT DES LECTURES ---\n");
@@ -328,15 +265,13 @@ void loop() {
 
   Serial.println("=================================================\n");
 
-  // Reconnexion Wi-Fi automatique propre si non connecté
+  // Reconnexion Wi-Fi automatique si perte de signal
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWiFiRetry = 0;
     if (millis() - lastWiFiRetry > 25000) {
       lastWiFiRetry = millis();
-      Serial.println("[Wi-Fi] Non connecté. Nouvelle tentative vers le cellulaire...");
-      WiFi.disconnect(true);
-      delay(150);
-      WiFi.begin(activeSSID.c_str(), WIFI_PASSWORD);
+      Serial.println("[Wi-Fi] Non connecté. Nouvelle tentative de reconnexion...");
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     }
   }
 
