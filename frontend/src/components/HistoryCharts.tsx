@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import type { TelemetryPoint } from '../lib/supabase';
 import { Calendar, TrendingUp, Sun, Droplets, Thermometer, Gauge } from 'lucide-react';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface HistoryChartsProps {
   data: TelemetryPoint[];
@@ -26,6 +27,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
   timeRange,
   onTimeRangeChange,
 }) => {
+  const { language, t } = useTranslation();
   const [metricTab, setMetricTab] = useState<'vpd' | 'temp' | 'hum' | 'light'>('vpd');
 
   // Formatage des timestamps
@@ -48,48 +50,56 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
         <div>
           <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-400" />
-            Historique & Évolution Climatique
+            {t.history.title}
           </h2>
-          <p className="text-xs text-slate-400">Suivi des conditions sur les différents étages de la tour ({data.length} mesures)</p>
+          <p className="text-xs text-slate-400">
+            {language === 'fr' 
+              ? `Suivi multi-niveaux (${data.length} mesures)` 
+              : `Multi-tier monitoring (${data.length} data points)`}
+          </p>
         </div>
 
         {/* Sélecteur de Métriques Convivial */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-950/70 rounded-2xl border border-slate-800 text-xs">
           <button
+            type="button"
             onClick={() => setMetricTab('vpd')}
-            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               metricTab === 'vpd' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Gauge className="w-3.5 h-3.5" />
-            Transpiration (VPD)
+            {t.history.tabVpd}
           </button>
           <button
+            type="button"
             onClick={() => setMetricTab('temp')}
-            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               metricTab === 'temp' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Thermometer className="w-3.5 h-3.5" />
-            Températures
+            {t.history.tabTemp}
           </button>
           <button
+            type="button"
             onClick={() => setMetricTab('hum')}
-            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               metricTab === 'hum' ? 'bg-emerald-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Droplets className="w-3.5 h-3.5" />
-            Humidité
+            {t.history.tabHum}
           </button>
           <button
+            type="button"
             onClick={() => setMetricTab('light')}
-            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               metricTab === 'light' ? 'bg-amber-500 text-slate-950 font-bold shadow' : 'text-slate-400 hover:text-white'
             }`}
           >
             <Sun className="w-3.5 h-3.5" />
-            Lumière (PAR)
+            {t.history.tabPar}
           </button>
         </div>
 
@@ -98,15 +108,16 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
           <Calendar className="w-3.5 h-3.5 text-slate-500 ml-2 mr-1" />
           {(['1h', '6h', '24h', '7d'] as const).map((range) => (
             <button
+              type="button"
               key={range}
               onClick={() => onTimeRangeChange(range)}
-              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all ${
+              className={`px-2.5 py-1 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                 timeRange === range
                   ? 'bg-slate-800 text-white border border-slate-700'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {range}
+              {range === '7d' && language === 'fr' ? '7j' : range}
             </button>
           ))}
         </div>
@@ -132,16 +143,38 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
               <YAxis domain={[0.2, 2.0]} stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
+                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US') : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
               
               {/* Plage cible agronomique optimale (0.8 à 1.4 kPa) */}
               <ReferenceArea y1={0.8} y2={1.4} fill="#10b981" fillOpacity={0.08} />
 
-              <Area type="monotone" dataKey="vpd0" name="Étage 1 (Bas / Racines)" stroke="#10b981" fill="url(#gradVpd0)" strokeWidth={2} />
-              <Area type="monotone" dataKey="vpd1" name="Étage 2 (Milieu)" stroke="#06b6d4" fill="url(#gradVpd1)" strokeWidth={2} />
-              <Area type="monotone" dataKey="vpd2" name="Étage 3 (Haut / Canopée)" stroke="#f59e0b" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
+              <Area 
+                type="monotone" 
+                dataKey="vpd0" 
+                name={language === 'fr' ? 'Étage 1 (Bas / Racines)' : 'Tier 1 (Lower / Roots)'} 
+                stroke="#10b981" 
+                fill="url(#gradVpd0)" 
+                strokeWidth={2} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="vpd1" 
+                name={language === 'fr' ? 'Étage 2 (Milieu)' : 'Tier 2 (Mid)'} 
+                stroke="#06b6d4" 
+                fill="url(#gradVpd1)" 
+                strokeWidth={2} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="vpd2" 
+                name={language === 'fr' ? 'Étage 3 (Haut / Canopée)' : 'Tier 3 (Upper Canopy)'} 
+                stroke="#f59e0b" 
+                fill="transparent" 
+                strokeWidth={2} 
+                strokeDasharray="4 4" 
+              />
             </AreaChart>
           ) : metricTab === 'temp' ? (
             <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -150,12 +183,33 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
               <YAxis domain={['dataMin - 1', 'dataMax + 1']} stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
+                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US') : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Line type="monotone" dataKey="t0" name="Étage 1 (Bas)" stroke="#10b981" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="t1" name="Étage 2 (Milieu)" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="t2" name="Étage 3 (Haut)" stroke="#f43f5e" strokeWidth={2.5} dot={false} />
+              <Line 
+                type="monotone" 
+                dataKey="t0" 
+                name={language === 'fr' ? 'Étage 1 (Bas)' : 'Tier 1 (Lower)'} 
+                stroke="#10b981" 
+                strokeWidth={2.5} 
+                dot={false} 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="t1" 
+                name={language === 'fr' ? 'Étage 2 (Milieu)' : 'Tier 2 (Mid)'} 
+                stroke="#38bdf8" 
+                strokeWidth={2.5} 
+                dot={false} 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="t2" 
+                name={language === 'fr' ? 'Étage 3 (Haut)' : 'Tier 3 (Upper)'} 
+                stroke="#f43f5e" 
+                strokeWidth={2.5} 
+                dot={false} 
+              />
             </LineChart>
           ) : metricTab === 'hum' ? (
             <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -164,12 +218,36 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
               <YAxis domain={[30, 90]} stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
+                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US') : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Area type="monotone" dataKey="h0" name="Humidité Étage 1 (%)" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
-              <Area type="monotone" dataKey="h1" name="Humidité Étage 2 (%)" stroke="#60a5fa" fill="#60a5fa" fillOpacity={0.1} strokeWidth={2} />
-              <Area type="monotone" dataKey="h2" name="Humidité Étage 3 (%)" stroke="#93c5fd" fill="#93c5fd" fillOpacity={0.1} strokeWidth={2} />
+              <Area 
+                type="monotone" 
+                dataKey="h0" 
+                name={language === 'fr' ? 'Humidité Étage 1 (%)' : 'Humidity Tier 1 (%)'} 
+                stroke="#3b82f6" 
+                fill="#3b82f6" 
+                fillOpacity={0.1} 
+                strokeWidth={2} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="h1" 
+                name={language === 'fr' ? 'Humidité Étage 2 (%)' : 'Humidity Tier 2 (%)'} 
+                stroke="#60a5fa" 
+                fill="#60a5fa" 
+                fillOpacity={0.1} 
+                strokeWidth={2} 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="h2" 
+                name={language === 'fr' ? 'Humidité Étage 3 (%)' : 'Humidity Tier 3 (%)'} 
+                stroke="#93c5fd" 
+                fill="#93c5fd" 
+                fillOpacity={0.1} 
+                strokeWidth={2} 
+              />
             </AreaChart>
           ) : (
             <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -178,13 +256,41 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
               <YAxis stroke="#64748b" tick={{ fontSize: 11 }} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155', borderRadius: '12px', fontSize: '12px' }}
-                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
+                labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString(language === 'fr' ? 'fr-FR' : 'en-US') : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Line type="monotone" dataKey="ppfd4" name="Lumière Étage 4 (µmol)" stroke="#fbbf24" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ppfd5" name="Lumière Étage 3 (µmol)" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ppfd6" name="Lumière Étage 2 (µmol)" stroke="#d97706" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ppfd7" name="Lumière Étage 1 (µmol)" stroke="#b45309" strokeWidth={2} dot={false} />
+              <Line 
+                type="monotone" 
+                dataKey="ppfd4" 
+                name={language === 'fr' ? 'Lumière Niveau 4 (µmol)' : 'Light Tier 4 (µmol)'} 
+                stroke="#fbbf24" 
+                strokeWidth={2} 
+                dot={false} 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="ppfd5" 
+                name={language === 'fr' ? 'Lumière Niveau 3 (µmol)' : 'Light Tier 3 (µmol)'} 
+                stroke="#f59e0b" 
+                strokeWidth={2} 
+                dot={false} 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="ppfd6" 
+                name={language === 'fr' ? 'Lumière Niveau 2 (µmol)' : 'Light Tier 2 (µmol)'} 
+                stroke="#d97706" 
+                strokeWidth={2} 
+                dot={false} 
+              />
+              <Line 
+                type="monotone" 
+                dataKey="ppfd7" 
+                name={language === 'fr' ? 'Lumière Niveau 1 (µmol)' : 'Light Tier 1 (µmol)'} 
+                stroke="#b45309" 
+                strokeWidth={2} 
+                dot={false} 
+              />
             </LineChart>
           )}
         </ResponsiveContainer>
@@ -192,8 +298,14 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
 
       {/* Note d'information sous le graphique */}
       <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs text-slate-500">
-        <span>Zone verte ombrée : Plage idéale de croissance des plantes (0.8 - 1.4 kPa)</span>
-        <span className="text-emerald-400/90 font-medium">Télémétrie en continu</span>
+        <span>
+          {language === 'fr'
+            ? 'Zone verte ombrée : Plage agronomique optimale (0.8 - 1.4 kPa)'
+            : 'Shaded green area: Optimal agronomic comfort range (0.8 - 1.4 kPa)'}
+        </span>
+        <span className="text-emerald-400/90 font-medium">
+          {language === 'fr' ? 'Télémétrie continue' : 'Continuous telemetry'}
+        </span>
       </div>
     </div>
   );

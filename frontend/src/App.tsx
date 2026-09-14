@@ -7,6 +7,8 @@ import { LoginModal } from './components/LoginModal';
 import { VpdGaugeCard } from './components/VpdGaugeCard';
 import { LightSpectrumCard } from './components/LightSpectrumCard';
 import { HistoryCharts } from './components/HistoryCharts';
+import { LanguageToggle } from './components/LanguageToggle';
+import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 import { supabase, isConfigured } from './lib/supabase';
 import type { TelemetryPoint } from './lib/supabase';
 import { 
@@ -59,7 +61,9 @@ function generateSeedHistory(): TelemetryPoint[] {
   return points;
 }
 
-export function App() {
+function MainDashboard() {
+  const { language, t } = useTranslation();
+
   // États d'authentification
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
@@ -83,7 +87,6 @@ export function App() {
     { channel: 7, label: 'Étage 1 (Bas)', lux: 4.61 },
   ]);
 
-
   // Historique de télémétrie
   const [historyData, setHistoryData] = useState<TelemetryPoint[]>(generateSeedHistory());
 
@@ -104,7 +107,7 @@ export function App() {
     localStorage.removeItem('username');
     setToken(null);
     setUsername(null);
-    addLog("Déconnexion administrateur. Mode public Lecture Seule activé.", "sys");
+    addLog(language === 'fr' ? "Déconnexion réussie. Mode lecture seule activé." : "Logged out. Read-only mode activated.", "sys");
   };
 
   // Connexion Admin
@@ -114,25 +117,36 @@ export function App() {
     setToken(newToken);
     setUsername(user);
     setIsLoginOpen(false);
-    addLog(`Connexion réussie (${user}). Accès déverrouillé.`, "sys");
+    addLog(language === 'fr' ? `Connexion réussie (${user}). Accès déverrouillé.` : `Authentication successful (${user}). Unlocked.`, "sys");
   };
 
-  // 1. Initialisation des logs conviviaux
+  // Initialisation des logs
   useEffect(() => {
-    addLog("Système de supervision prêt - Capteurs connectés.", "sys");
-    addLog("Étage 1 (Bas) : Température 26.8°C | Humidité 60.7% | Pression 1003.5 hPa", "sensor");
-    addLog("Étage 2 (Milieu) : Température 26.8°C | Humidité 63.1% | Pression 1004.7 hPa", "sensor");
-    addLog("Étage 3 (Haut) : Température 26.8°C | Humidité 62.6% | Pression 1002.8 hPa", "sensor");
-    addLog("Éclairage Étage 4 : 20.3 Lux (0.30 µmol/m²/s PAR)", "sensor");
-    addLog("Éclairage Étage 3 : 7.8 Lux (0.12 µmol/m²/s PAR)", "sensor");
-    addLog("Éclairage Étage 2 : 12.4 Lux (0.19 µmol/m²/s PAR)", "sensor");
-    addLog("Éclairage Étage 1 : 4.6 Lux (0.07 µmol/m²/s PAR)", "sensor");
-  }, []);
+    if (language === 'fr') {
+      addLog("Système de télémétrie prêt · Capteurs en ligne.", "sys");
+      addLog("Étage 1 (Bas) : Température 26.8°C | Humidité 60.7% | Pression 1003.5 hPa", "sensor");
+      addLog("Étage 2 (Milieu) : Température 26.8°C | Humidité 63.1% | Pression 1004.7 hPa", "sensor");
+      addLog("Étage 3 (Haut) : Température 26.8°C | Humidité 62.6% | Pression 1002.8 hPa", "sensor");
+      addLog("Éclairage Étage 4 : 20.3 Lux (0.30 µmol/m²/s PAR)", "sensor");
+      addLog("Éclairage Étage 3 : 7.8 Lux (0.12 µmol/m²/s PAR)", "sensor");
+      addLog("Éclairage Étage 2 : 12.4 Lux (0.19 µmol/m²/s PAR)", "sensor");
+      addLog("Éclairage Étage 1 : 4.6 Lux (0.07 µmol/m²/s PAR)", "sensor");
+    } else {
+      addLog("Telemetry system online · All sensors connected.", "sys");
+      addLog("Tier 1 (Roots) : Temp 26.8°C | Humidity 60.7% | Pressure 1003.5 hPa", "sensor");
+      addLog("Tier 2 (Mid)   : Temp 26.8°C | Humidity 63.1% | Pressure 1004.7 hPa", "sensor");
+      addLog("Tier 3 (Canopy): Temp 26.8°C | Humidity 62.6% | Pressure 1002.8 hPa", "sensor");
+      addLog("Light Tier 4 : 20.3 Lux (0.30 µmol/m²/s PAR)", "sensor");
+      addLog("Light Tier 3 : 7.8 Lux (0.12 µmol/m²/s PAR)", "sensor");
+      addLog("Light Tier 2 : 12.4 Lux (0.19 µmol/m²/s PAR)", "sensor");
+      addLog("Light Tier 1 : 4.6 Lux (0.07 µmol/m²/s PAR)", "sensor");
+    }
+  }, [language]);
 
-  // 2. Gestion de la synchronisation Supabase ou Simulation Live
+  // Synchronisation Supabase ou Simulation Live
   useEffect(() => {
     if (isConfigured) {
-      addLog("Synchronisation temps réel connectée.", "sys");
+      addLog(language === 'fr' ? "Synchronisation temps réel connectée." : "Realtime sync connected.", "sys");
       const channel = supabase
         .channel('live-telemetry')
         .on(
@@ -152,7 +166,9 @@ export function App() {
               { channel: 7, label: 'Étage 1 (Bas)', lux: row.lux7 },
             ]);
             setHistoryData(prev => [...prev.slice(1), row]);
-            addLog(`Nouvelles mesures reçues : Confort=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`, 'sensor');
+            addLog(language === 'fr' 
+              ? `Nouvelles mesures reçues : Confort=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`
+              : `New readings received: VPD=${row.vpd0} kPa, Top Lux=${row.lux4} Lux`, 'sensor');
             setConnectionState('Connected');
           }
         )
@@ -172,40 +188,48 @@ export function App() {
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, []);
+  }, [language]);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
       
       {/* BANNIÈRE SYSTÈME IOT CONVIVIALE */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-b border-slate-800 px-4 py-2.5">
+      <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-b border-slate-800 px-4 py-2">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
             <span className="flex h-2 w-2 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="font-semibold text-emerald-400">Supervision en Direct</span>
+            <span className="font-semibold text-emerald-400">
+              {language === 'fr' ? 'Supervision en Direct' : 'Live Monitoring'}
+            </span>
             <span className="text-slate-600">|</span>
-            <span className="text-slate-300">Tour Horticole Verticale · 3 Niveaux de Culture · 4 Zones Lumineuses</span>
+            <span className="text-slate-300 hidden sm:inline">
+              {language === 'fr' 
+                ? 'Tour Horticole Verticale · 3 Niveaux de Culture · 4 Zones Lumineuses' 
+                : 'Vertical Horticultural Tower · 3 Growing Levels · 4 Light Zones'}
+            </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
               <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-              <span className="font-medium">{connectionState}</span>
+              <span className="font-medium">
+                {connectionState === 'Live Showcase' ? t.nav.showcaseBadge : connectionState}
+              </span>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-medium text-[11px] flex items-center gap-1.5">
+            <span className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-medium text-[11px]">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              Éclairage Horticole 5000K
+              5000K Daylight
             </span>
             {token ? (
               <span className="flex items-center gap-1 text-emerald-400 font-semibold">
                 <ShieldCheck className="w-3.5 h-3.5" /> Admin ({username})
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-slate-400 font-medium">
-                <Eye className="w-3.5 h-3.5" /> Visiteur (Lecture seule)
+              <span className="flex items-center gap-1 text-slate-400 font-medium text-[11px]">
+                <Eye className="w-3.5 h-3.5" /> {language === 'fr' ? 'Visiteur' : 'Guest'}
               </span>
             )}
           </div>
@@ -213,88 +237,137 @@ export function App() {
       </div>
 
       {/* HEADER PRINCIPAL */}
-      <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-950/80 border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-950/85 border-b border-slate-800/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <Activity className="w-5 h-5 text-slate-950 font-bold" />
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                Tower Garden <span className="text-emerald-400">Supervision</span>
+                Agroroue <span className="text-emerald-400">{t.nav.title}</span>
               </h1>
-              <p className="text-[11px] text-slate-400">Suivi en direct du confort des plantes (VPD), du climat et de la lumière</p>
+              <p className="text-[11px] text-slate-400 hidden sm:block">{t.nav.subtitle}</p>
             </div>
           </div>
 
           {/* Onglets de navigation conviviaux */}
-          <nav className="hidden md:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800">
+          <nav className="hidden lg:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800">
             <button
+              type="button"
               onClick={() => setActiveTab('live')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'live'
                   ? 'bg-emerald-500 text-slate-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              Climat & VPD
+              {t.nav.tabOverview}
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('history')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'history'
                   ? 'bg-emerald-500 text-slate-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              Graphiques d'Évolution
+              {t.nav.tabHistory}
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('controls')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'controls'
                   ? 'bg-emerald-500 text-slate-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              Équipements & Arrosage
+              {t.nav.tabControls}
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('logs')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'logs'
                   ? 'bg-emerald-500 text-slate-950 shadow-md'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
               <Terminal className="w-3.5 h-3.5" />
-              Journal d'Activité
+              {t.nav.tabLogs}
             </button>
           </nav>
 
-          {/* Bouton de Login / Profil */}
-          <div className="flex items-center gap-3">
+          {/* Boutons d'Action : Sélecteur de Langue + Login */}
+          <div className="flex items-center gap-2.5">
+            {/* Toggle Switch Bilingue FR / EN */}
+            <LanguageToggle />
+
             {token ? (
               <button
+                type="button"
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-700 text-rose-400 hover:bg-rose-500/10 transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-700 text-rose-400 hover:bg-rose-500/10 transition-all cursor-pointer"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                Déconnexion
+                <span className="hidden sm:inline">{t.nav.logout}</span>
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() => setIsLoginOpen(true)}
-                className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 transition-all"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 transition-all cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                Admin Login
+                <span>{t.nav.login}</span>
               </button>
             )}
           </div>
+        </div>
+
+        {/* Barre d'onglets pour mobiles et petits écrans */}
+        <div className="lg:hidden px-4 pb-2.5 pt-1 overflow-x-auto flex items-center gap-1.5 border-t border-slate-800/60">
+          <button
+            type="button"
+            onClick={() => setActiveTab('live')}
+            className={`px-3 py-1 rounded-xl text-xs font-medium whitespace-nowrap ${
+              activeTab === 'live' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 bg-slate-900/60'
+            }`}
+          >
+            {t.nav.tabOverview}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`px-3 py-1 rounded-xl text-xs font-medium whitespace-nowrap ${
+              activeTab === 'history' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 bg-slate-900/60'
+            }`}
+          >
+            {t.nav.tabHistory}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('controls')}
+            className={`px-3 py-1 rounded-xl text-xs font-medium whitespace-nowrap ${
+              activeTab === 'controls' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 bg-slate-900/60'
+            }`}
+          >
+            {t.nav.tabControls}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('logs')}
+            className={`px-3 py-1 rounded-xl text-xs font-medium whitespace-nowrap ${
+              activeTab === 'logs' ? 'bg-emerald-500 text-slate-950 font-bold' : 'text-slate-400 bg-slate-900/60'
+            }`}
+          >
+            {t.nav.tabLogs}
+          </button>
         </div>
       </header>
 
@@ -324,13 +397,12 @@ export function App() {
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-emerald-400" />
-                  Climat des 3 Niveaux de Culture
+                  {t.climate.title}
                 </h2>
-                <span className="text-xs text-slate-500">Température, humidité relative et pression</span>
+                <span className="text-xs text-slate-500">{t.climate.subtitle}</span>
               </div>
               <SensorsGrid zones={zoneReadings} />
             </div>
-
 
           </div>
         )}
@@ -353,9 +425,13 @@ export function App() {
               <div>
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                   <Sliders className="w-4 h-4 text-emerald-400" />
-                  Gestion des Équipements & Actionneurs
+                  {language === 'fr' ? 'Gestion des Équipements & Actionneurs' : 'Equipment & Actuator Management'}
                 </h2>
-                <p className="text-xs text-slate-500">Statut de l'éclairage horticole Barrina T8 et module d'irrigation</p>
+                <p className="text-xs text-slate-500">
+                  {language === 'fr' 
+                    ? "Statut de l'éclairage horticole Barrina T8 et circuit d'irrigation" 
+                    : "Status of Barrina T8 horticultural light fixtures and irrigation circuit"}
+                </p>
               </div>
             </div>
 
@@ -372,23 +448,27 @@ export function App() {
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-emerald-400" />
-                <h3 className="font-bold text-sm text-white">Journal d'Activité & Relevés Récents</h3>
+                <h3 className="font-bold text-sm text-white">{t.logs.title}</h3>
               </div>
-              <span className="text-xs text-slate-500">Flux d'événements en direct</span>
+              <span className="text-xs text-slate-500">{t.logs.subtitle}</span>
             </div>
 
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs space-y-1.5 max-h-96 overflow-y-auto">
-              {mqttLogs.map((log) => (
-                <div key={log.id} className="flex items-start gap-2 leading-relaxed">
-                  <span className="text-slate-500 select-none">[{log.time}]</span>
-                  <span className={
-                    log.type === 'sensor' ? 'text-emerald-400' :
-                    log.type === 'command' ? 'text-amber-400 font-semibold' : 'text-sky-300'
-                  }>
-                    {log.text}
-                  </span>
-                </div>
-              ))}
+              {mqttLogs.length === 0 ? (
+                <div className="text-slate-500 py-4 text-center">{t.logs.empty}</div>
+              ) : (
+                mqttLogs.map((log) => (
+                  <div key={log.id} className="flex items-start gap-2 leading-relaxed">
+                    <span className="text-slate-500 select-none">[{log.time}]</span>
+                    <span className={
+                      log.type === 'sensor' ? 'text-emerald-400' :
+                      log.type === 'command' ? 'text-amber-400 font-semibold' : 'text-sky-300'
+                    }>
+                      {log.text}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -404,6 +484,14 @@ export function App() {
         />
       )}
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <LanguageProvider>
+      <MainDashboard />
+    </LanguageProvider>
   );
 }
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { calculatePAR } from '../utils/agronomy';
 import type { ParResult } from '../utils/agronomy';
 import { Sun, Sparkles, Clock, Layers, CheckCircle } from 'lucide-react';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface LightSensorData {
   channel: number;
@@ -14,10 +15,33 @@ interface LightSpectrumCardProps {
 }
 
 export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors }) => {
+  const { language, t } = useTranslation();
   const [photoperiod, setPhotoperiod] = useState<12 | 16 | 18>(16);
 
   // Maximum d'échelle PPFD pour la jauge
   const maxScalePpfd = 600;
+
+  const getTranslatedLevelName = (channel: number, fallback: string) => {
+    switch (channel) {
+      case 4: return t.light.levels.level4;
+      case 5: return t.light.levels.level3;
+      case 6: return t.light.levels.level2;
+      case 7: return t.light.levels.level1;
+      default: return fallback;
+    }
+  };
+
+  const getTranslatedIntensity = (intensity: ParResult['intensityLabel']) => {
+    if (language === 'fr') return intensity;
+    switch (intensity) {
+      case 'Faible': return 'Low';
+      case 'Semis/Boutures': return 'Clones/Seedlings';
+      case 'Croissance': return 'Vegetative';
+      case 'Floraison': return 'Flowering';
+      case 'Saturation': return 'Saturation';
+      default: return intensity;
+    }
+  };
 
   return (
     <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 backdrop-blur-xl relative overflow-hidden shadow-2xl flex flex-col justify-between">
@@ -33,26 +57,28 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white tracking-tight">
-                Lumière Utile aux Plantes (PAR / PPFD)
+                {t.light.title}
               </h2>
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
-                Spectre 5000K
+                5000K Daylight
               </span>
             </div>
-            <p className="text-xs text-slate-400">Quantité réelle de lumière reçue pour la photosynthèse</p>
+            <p className="text-xs text-slate-400">{t.light.subtitle}</p>
           </div>
         </div>
 
         {/* Sélecteur d'heures d'éclairage pour le calcul de la dose journalière (DLI) */}
         <div className="flex items-center gap-1.5 bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 text-xs">
           <Clock className="w-3.5 h-3.5 text-slate-400 ml-1" />
-          <span className="text-[11px] text-slate-400 mr-1">Éclairage / jour :</span>
+          <span className="text-[11px] text-slate-400 mr-1">
+            {language === 'fr' ? 'Éclairage / jour :' : 'Light / day:'}
+          </span>
           {([12, 16, 18] as const).map((h) => (
             <button
               key={h}
               onClick={() => setPhotoperiod(h)}
-              className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 photoperiod === h
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
@@ -79,10 +105,12 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-amber-400/70" />
-                  <span className="text-xs font-semibold text-slate-300">{s.label}</span>
+                  <span className="text-xs font-semibold text-slate-300">
+                    {getTranslatedLevelName(s.channel, s.label)}
+                  </span>
                 </div>
                 <span className="text-[10px] font-medium text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full">
-                  Niveau {4 - index}
+                  {language === 'fr' ? `Niveau ${4 - index}` : `Tier ${4 - index}`}
                 </span>
               </div>
 
@@ -108,8 +136,13 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>Dose journalière : <strong className="text-slate-200">{currentDli}</strong> mol/m²</span>
-                  <span className="text-amber-400/90 font-medium">{par.intensityLabel}</span>
+                  <span>
+                    {language === 'fr' ? 'Dose journalière : ' : 'Daily DLI: '}
+                    <strong className="text-slate-200">{currentDli}</strong> mol/m²
+                  </span>
+                  <span className="text-amber-400/90 font-medium">
+                    {getTranslatedIntensity(par.intensityLabel)}
+                  </span>
                 </div>
               </div>
             </div>
@@ -121,9 +154,15 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
       <div className="p-3 rounded-2xl bg-slate-950/40 border border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 relative z-10">
         <div className="flex items-center gap-1.5">
           <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Éclairage continu optimisé pour toutes les étapes de croissance des plantes</span>
+          <span>
+            {language === 'fr' 
+              ? 'Éclairage continu optimisé pour toutes les étapes végétales' 
+              : 'Continuous spectrum optimized for all vegetative growth stages'}
+          </span>
         </div>
-        <span className="text-amber-400/90 font-medium">Lumière photosynthétique</span>
+        <span className="text-amber-400/90 font-medium">
+          {language === 'fr' ? 'Lumière photosynthétique' : 'Photosynthetic light'}
+        </span>
       </div>
     </div>
   );

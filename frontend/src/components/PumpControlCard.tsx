@@ -1,5 +1,6 @@
 import React from 'react';
 import { Droplet, ShieldAlert, ShieldCheck, Waves, Info } from 'lucide-react';
+import { useTranslation } from '../i18n/LanguageContext';
 
 interface PumpProps {
   isRunning?: boolean;
@@ -8,6 +9,8 @@ interface PumpProps {
 export const PumpControlCard: React.FC<PumpProps> = ({
   isRunning = true,
 }) => {
+  const { t } = useTranslation();
+
   return (
     <div className="relative overflow-hidden rounded-3xl bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl border border-slate-800 flex flex-col justify-between">
       {/* Halo discret cyan / eau */}
@@ -22,17 +25,17 @@ export const PumpControlCard: React.FC<PumpProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-base text-white">Circuit d'Irrigation</h3>
+                <h3 className="font-bold text-base text-white">{t.irrigation.title}</h3>
                 <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1.5 ${
                   isRunning 
                     ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' 
                     : 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-                  {isRunning ? 'Irrigation Continue' : 'Arrêt Sécurité'}
+                  {isRunning ? t.irrigation.continuous : t.irrigation.safetyStop}
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Ruissellement permanent sur le système racinaire</p>
+              <p className="text-xs text-slate-400">{t.irrigation.subtitle}</p>
             </div>
           </div>
         </div>
@@ -42,18 +45,18 @@ export const PumpControlCard: React.FC<PumpProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
               <Waves className={`w-4 h-4 ${isRunning ? 'text-cyan-400 animate-bounce' : 'text-slate-500'}`} />
-              <span>Régime de fonctionnement</span>
+              <span>{t.irrigation.regimeTitle}</span>
             </div>
             <span className={`text-xs font-bold px-2.5 py-0.5 rounded-lg border ${
               isRunning
                 ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
                 : 'text-rose-400 bg-rose-500/10 border-rose-500/20'
             }`}>
-              {isRunning ? '24h / 24 · 100% Actif' : 'Sécurité Déclenchée'}
+              {isRunning ? t.irrigation.regimeActive : t.irrigation.regimeStopped}
             </span>
           </div>
           <p className="text-xs text-slate-400 leading-relaxed">
-            La tour fonctionne en apport hydrique continu pour maintenir une oxygénation et une nutrition optimales sans stress hydrique.
+            {t.irrigation.regimeDesc}
           </p>
         </div>
 
@@ -61,14 +64,14 @@ export const PumpControlCard: React.FC<PumpProps> = ({
         <div className="space-y-2 mb-5">
           <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block flex items-center gap-1.5">
             <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-            Sécurités Automatiques (En cours d'intégration)
+            {t.irrigation.safetiesTitle}
           </span>
 
           <div className="p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 text-xs text-slate-300 space-y-2">
             <div className="flex items-start gap-2 text-[11px] text-slate-300">
               <Info className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
               <span>
-                En conditions normales, l'arrosage ne s'arrête jamais. La possibilité de couper la pompe sera réservée exclusivement aux deux conditions de sécurité suivantes :
+                {t.irrigation.safetiesIntro}
               </span>
             </div>
 
@@ -76,16 +79,16 @@ export const PumpControlCard: React.FC<PumpProps> = ({
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-start gap-2">
                 <span className="text-amber-400 font-bold text-xs mt-0.5">1.</span>
                 <div>
-                  <strong className="text-white text-xs block">Manque d'eau</strong>
-                  <span className="text-[10px] text-slate-400">Coupure d'urgence si niveau bas critique pour protéger la pompe contre la marche à sec.</span>
+                  <strong className="text-white text-xs block">{t.irrigation.triggerLowWater}</strong>
+                  <span className="text-[10px] text-slate-400">{t.irrigation.triggerLowWaterDesc}</span>
                 </div>
               </div>
 
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 flex items-start gap-2">
                 <span className="text-amber-400 font-bold text-xs mt-0.5">2.</span>
                 <div>
-                  <strong className="text-white text-xs block">Débordement / Fuite</strong>
-                  <span className="text-[10px] text-slate-400">Arrêt immédiat lors d'une détection de liquide au sol ou débordement.</span>
+                  <strong className="text-white text-xs block">{t.irrigation.triggerLeak}</strong>
+                  <span className="text-[10px] text-slate-400">{t.irrigation.triggerLeakDesc}</span>
                 </div>
               </div>
             </div>
@@ -97,9 +100,9 @@ export const PumpControlCard: React.FC<PumpProps> = ({
       <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
         <span className="flex items-center gap-1 text-slate-400">
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          Régime permanent sécurisé
+          {t.irrigation.permanentSecured}
         </span>
-        <span className="text-slate-400 font-mono text-[10px]">Coupure asservie aux capteurs</span>
+        <span className="text-slate-400 font-mono text-[10px]">{t.irrigation.futureSensors}</span>
       </div>
     </div>
   );
