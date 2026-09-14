@@ -81,15 +81,15 @@ export function App() {
   
   // États des capteurs réels (Initialisés avec la trame fournie par l'utilisateur !)
   const [zoneReadings, setZoneReadings] = useState<ZoneSensorReading[]>([
-    { channel: 0, label: 'Zone 0 (Base / Racinaire)', ahtTemp: 26.8, ahtHum: 60.7, bmpTemp: 27.6, pressure: 1003.5 },
-    { channel: 1, label: 'Zone 1 (Étage Médian)',     ahtTemp: 26.8, ahtHum: 63.1, bmpTemp: 27.7, pressure: 1004.7 },
-    { channel: 2, label: 'Zone 2 (Canopée Supérieure)', ahtTemp: 26.8, ahtHum: 62.6, bmpTemp: 27.5, pressure: 1002.8 },
+    { channel: 0, label: 'Étage 1 (Zone Basse / Racines)', ahtTemp: 26.8, ahtHum: 60.7, bmpTemp: 27.6, pressure: 1003.5 },
+    { channel: 1, label: 'Étage 2 (Zone Médiane)',     ahtTemp: 26.8, ahtHum: 63.1, bmpTemp: 27.7, pressure: 1004.7 },
+    { channel: 2, label: 'Étage 3 (Canopée Supérieure)', ahtTemp: 26.8, ahtHum: 62.6, bmpTemp: 27.5, pressure: 1002.8 },
   ]);
 
   const [lightSensors, setLightSensors] = useState([
-    { channel: 4, label: 'Étage 4 (Haut)', lux: 20.28 },
-    { channel: 5, label: 'Étage 3 (Milieu-Haut)', lux: 7.83 },
-    { channel: 6, label: 'Étage 2 (Milieu-Bas)', lux: 12.44 },
+    { channel: 4, label: 'Étage 4 (Sommet)', lux: 20.28 },
+    { channel: 5, label: 'Étage 3 (Haut)', lux: 7.83 },
+    { channel: 6, label: 'Étage 2 (Milieu)', lux: 12.44 },
     { channel: 7, label: 'Étage 1 (Bas)', lux: 4.61 },
   ]);
 
@@ -132,25 +132,25 @@ export function App() {
     setToken(newToken);
     setUsername(user);
     setIsLoginOpen(false);
-    addLog(`Connexion réussie (${user}). Accès en écriture déverrouillé.`, "sys");
+    addLog(`Connexion réussie (${user}). Accès déverrouillé.`, "sys");
   };
 
-  // 1. Initialisation des logs avec la trame exacte de l'ESP32
+  // 1. Initialisation des logs conviviaux
   useEffect(() => {
-    addLog("Passerelle ESP32 initialisée - Télémétrie optique et climatique active.", "sys");
-    addLog("[Canal 0] AHT20 | Temp: 26.8 C | Hum: 60.7 % | BMP: 27.6 C | Pression: 1003.5 hPa", "sensor");
-    addLog("[Canal 1] AHT20 | Temp: 26.8 C | Hum: 63.1 % | BMP: 27.7 C | Pression: 1004.7 hPa", "sensor");
-    addLog("[Canal 2] AHT20 | Temp: 26.8 C | Hum: 62.6 % | BMP: 27.5 C | Pression: 1002.8 hPa", "sensor");
-    addLog("[Canal 4] VEML : 20.28 Lux | PPFD: 0.30 µmol/m²/s", "sensor");
-    addLog("[Canal 5] VEML : 7.83 Lux | PPFD: 0.12 µmol/m²/s", "sensor");
-    addLog("[Canal 6] VEML : 12.44 Lux | PPFD: 0.19 µmol/m²/s", "sensor");
-    addLog("[Canal 7] VEML : 4.61 Lux | PPFD: 0.07 µmol/m²/s", "sensor");
+    addLog("Système de supervision prêt - Capteurs connectés.", "sys");
+    addLog("Étage 1 (Bas) : Température 26.8°C | Humidité 60.7% | Pression 1003.5 hPa", "sensor");
+    addLog("Étage 2 (Milieu) : Température 26.8°C | Humidité 63.1% | Pression 1004.7 hPa", "sensor");
+    addLog("Étage 3 (Haut) : Température 26.8°C | Humidité 62.6% | Pression 1002.8 hPa", "sensor");
+    addLog("Éclairage Étage 4 : 20.3 Lux (0.30 µmol/m²/s PAR)", "sensor");
+    addLog("Éclairage Étage 3 : 7.8 Lux (0.12 µmol/m²/s PAR)", "sensor");
+    addLog("Éclairage Étage 2 : 12.4 Lux (0.19 µmol/m²/s PAR)", "sensor");
+    addLog("Éclairage Étage 1 : 4.6 Lux (0.07 µmol/m²/s PAR)", "sensor");
   }, []);
 
   // 2. Gestion de la synchronisation Supabase ou Simulation Live
   useEffect(() => {
     if (isConfigured) {
-      addLog("Connexion au WebSocket Realtime Supabase...", "sys");
+      addLog("Synchronisation temps réel connectée.", "sys");
       const channel = supabase
         .channel('live-telemetry')
         .on(
@@ -159,18 +159,18 @@ export function App() {
           (payload) => {
             const row = payload.new as TelemetryPoint;
             setZoneReadings([
-              { channel: 0, label: 'Zone 0 (Base / Racinaire)', ahtTemp: row.t0, ahtHum: row.h0, bmpTemp: row.t0 + 0.8, pressure: row.p0 },
-              { channel: 1, label: 'Zone 1 (Étage Médian)',     ahtTemp: row.t1, ahtHum: row.h1, bmpTemp: row.t1 + 0.9, pressure: row.p1 },
-              { channel: 2, label: 'Zone 2 (Canopée Supérieure)', ahtTemp: row.t2, ahtHum: row.h2, bmpTemp: row.t2 + 0.7, pressure: row.p2 },
+              { channel: 0, label: 'Étage 1 (Zone Basse / Racines)', ahtTemp: row.t0, ahtHum: row.h0, bmpTemp: row.t0 + 0.8, pressure: row.p0 },
+              { channel: 1, label: 'Étage 2 (Zone Médiane)',     ahtTemp: row.t1, ahtHum: row.h1, bmpTemp: row.t1 + 0.9, pressure: row.p1 },
+              { channel: 2, label: 'Étage 3 (Canopée Supérieure)', ahtTemp: row.t2, ahtHum: row.h2, bmpTemp: row.t2 + 0.7, pressure: row.p2 },
             ]);
             setLightSensors([
-              { channel: 4, label: 'Étage 4 (Haut)', lux: row.lux4 },
-              { channel: 5, label: 'Étage 3 (Milieu-Haut)', lux: row.lux5 },
-              { channel: 6, label: 'Étage 2 (Milieu-Bas)', lux: row.lux6 },
+              { channel: 4, label: 'Étage 4 (Sommet)', lux: row.lux4 },
+              { channel: 5, label: 'Étage 3 (Haut)', lux: row.lux5 },
+              { channel: 6, label: 'Étage 2 (Milieu)', lux: row.lux6 },
               { channel: 7, label: 'Étage 1 (Bas)', lux: row.lux7 },
             ]);
             setHistoryData(prev => [...prev.slice(1), row]);
-            addLog(`Télémétrie reçue [Supabase] : VPD0=${row.vpd0} kPa, Lux4=${row.lux4}`, 'sensor');
+            addLog(`Nouvelles mesures reçues : Confort=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`, 'sensor');
             setConnectionState('Connected');
           }
         )
@@ -195,7 +195,7 @@ export function App() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
       
-      {/* BANNIÈRE SYSTÈME IOT & SPÉCIFICATIONS MATÉRIELLES */}
+      {/* BANNIÈRE SYSTÈME IOT CONVIVIALE */}
       <div className="bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 border-b border-slate-800 px-4 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
@@ -203,9 +203,9 @@ export function App() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            <span className="font-semibold text-emerald-400">Télémétrie en Direct</span>
+            <span className="font-semibold text-emerald-400">Supervision en Direct</span>
             <span className="text-slate-600">|</span>
-            <span className="text-slate-300">ESP32 + TCA9548A · 3x Modules (AHT20/BMP280) · 4x Capteurs VEML7700</span>
+            <span className="text-slate-300">Tour Horticole Verticale · 3 Niveaux de Culture · 4 Zones Lumineuses</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -213,9 +213,9 @@ export function App() {
               <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
               <span className="font-medium">{connectionState}</span>
             </div>
-            <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-mono text-[11px] flex items-center gap-1.5">
+            <span className="px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-medium text-[11px] flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-              Spectre Fixe : Barrina T8 5000K (CRI 98+)
+              Éclairage Horticole 5000K
             </span>
             {token ? (
               <span className="flex items-center gap-1 text-emerald-400 font-semibold">
@@ -239,13 +239,13 @@ export function App() {
             </div>
             <div>
               <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
-                Tower Garden <span className="text-emerald-400">Agronomy</span>
+                Tower Garden <span className="text-emerald-400">Supervision</span>
               </h1>
-              <p className="text-[11px] text-slate-400">Supervision Climat, VPD & Spectre PAR en Temps Réel</p>
+              <p className="text-[11px] text-slate-400">Suivi en direct du confort des plantes (VPD), du climat et de la lumière</p>
             </div>
           </div>
 
-          {/* Onglets de navigation */}
+          {/* Onglets de navigation conviviaux */}
           <nav className="hidden md:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800">
             <button
               onClick={() => setActiveTab('live')}
@@ -256,7 +256,7 @@ export function App() {
               }`}
             >
               <Activity className="w-3.5 h-3.5" />
-              Live & Agronomie
+              Climat & VPD
             </button>
             <button
               onClick={() => setActiveTab('history')}
@@ -267,7 +267,7 @@ export function App() {
               }`}
             >
               <TrendingUp className="w-3.5 h-3.5" />
-              Graphiques d'Historique
+              Graphiques d'Évolution
             </button>
             <button
               onClick={() => setActiveTab('controls')}
@@ -278,7 +278,7 @@ export function App() {
               }`}
             >
               <Sliders className="w-3.5 h-3.5" />
-              Actionneurs & Matériel
+              Équipements & Arrosage
             </button>
             <button
               onClick={() => setActiveTab('logs')}
@@ -289,7 +289,7 @@ export function App() {
               }`}
             >
               <Terminal className="w-3.5 h-3.5" />
-              Trames & Logs
+              Journal d'Activité
             </button>
           </nav>
 
@@ -337,14 +337,14 @@ export function App() {
               <LightSpectrumCard sensors={lightSensors} />
             </div>
 
-            {/* LIGNE 2 : LES 3 ZONES DE CAPTEURS PHYSIQUES AHT20 + BMP280 */}
+            {/* LIGNE 2 : LES 3 ÉTAGES DE CULTURE */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-emerald-400" />
-                  Modules Physiques Multiplexés (TCA9548A Canaux 0, 1, 2)
+                  Climat des 3 Niveaux de Culture
                 </h2>
-                <span className="text-xs text-slate-500">AHT20 (Hum/T°) + BMP280 (Pression/T°)</span>
+                <span className="text-xs text-slate-500">Température, humidité relative et pression</span>
               </div>
               <SensorsGrid zones={zoneReadings} />
             </div>
@@ -402,15 +402,15 @@ export function App() {
           </div>
         )}
 
-        {/* ONGLET 4 : CONSOLE DES TRAMES BRUTES & LOGS MQTT */}
+        {/* ONGLET 4 : JOURNAL D'ACTIVITÉ */}
         {activeTab === 'logs' && (
           <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 backdrop-blur-xl shadow-2xl space-y-4 animate-in fade-in duration-300">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Terminal className="w-4 h-4 text-emerald-400" />
-                <h3 className="font-bold text-sm text-white">Console Virtuelle Trames ESP32 & Événements</h3>
+                <h3 className="font-bold text-sm text-white">Journal d'Activité & Relevés Récents</h3>
               </div>
-              <span className="text-xs text-slate-500 font-mono">Format Raw Serial / MQTT</span>
+              <span className="text-xs text-slate-500">Flux d'événements en direct</span>
             </div>
 
             <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs space-y-1.5 max-h-96 overflow-y-auto">

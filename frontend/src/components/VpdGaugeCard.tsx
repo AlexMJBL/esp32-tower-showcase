@@ -46,9 +46,9 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
           </div>
           <div>
             <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-              Déficit de Pression de Vapeur (VPD)
+              Confort Climatique & Transpiration (VPD)
             </h2>
-            <p className="text-xs text-slate-400">Indicateur biologique de transpiration stomatique</p>
+            <p className="text-xs text-slate-400">Indicateur de bonne santé et d'absorption des nutriments</p>
           </div>
         </div>
 
@@ -59,14 +59,14 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
               ? 'bg-slate-800 border-slate-600 text-white' 
               : 'bg-slate-800/50 border-slate-800 text-slate-400 hover:text-white'
           }`}
-          title="Ajuster le décalage thermique de la feuille"
+          title="Ajuster la température estimée des feuilles"
         >
           <Sliders className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Offset Feuille ({leafOffset}°C)</span>
+          <span className="hidden sm:inline">Écart Feuille ({leafOffset}°C)</span>
         </button>
       </div>
 
-      {/* Sélecteur de zone / étage */}
+      {/* Sélecteur d'étage de la tour */}
       <div className="flex gap-2 p-1 bg-slate-950/60 rounded-2xl border border-slate-800/80 mb-5 relative z-10">
         {zones.map((z, idx) => (
           <button
@@ -87,7 +87,7 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
       {showSettings && (
         <div className="mb-5 p-4 rounded-2xl bg-slate-950/70 border border-slate-800 relative z-10 animate-in fade-in slide-in-from-top-2 duration-200">
           <div className="flex justify-between items-center text-xs mb-2">
-            <span className="text-slate-300 font-medium">Décalage thermique feuille (T° feuille - T° air) :</span>
+            <span className="text-slate-300 font-medium">Différence estimée (Température feuille - Température air) :</span>
             <span className="font-mono font-bold text-emerald-400">{leafOffset} °C</span>
           </div>
           <input
@@ -101,7 +101,7 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
           />
           <p className="text-[11px] text-slate-500 mt-2 flex items-center gap-1">
             <Info className="w-3 h-3 flex-shrink-0 text-slate-400" />
-            Sous LED sans rayonnement infrarouge direct, les feuilles sont généralement 1.5°C à 2°C plus fraîches par transpiration.
+            Sous éclairage LED, les feuilles transpirent et sont généralement 1.5°C plus fraîches que l'air ambiant.
           </p>
         </div>
       )}
@@ -111,7 +111,7 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
         {/* VPD Feuille (Principal) */}
         <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/90 relative">
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
-            <span className="font-semibold uppercase tracking-wider text-[10px]">VPD Feuille (Biologique)</span>
+            <span className="font-semibold uppercase tracking-wider text-[10px]">Indice de Confort (VPD)</span>
             <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${vpdData.badgeBg}`}>
               {vpdData.statusLabel}
             </span>
@@ -127,25 +127,25 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
           </p>
         </div>
 
-        {/* VPD Air ambiant & T°/Hum */}
+        {/* Climat ambiant */}
         <div className="p-4 rounded-2xl bg-slate-950/60 border border-slate-800/90 flex flex-col justify-between">
           <div>
             <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-400 block mb-1">
-              VPD Air Ambiant
+              Climat Ambiant
             </span>
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-slate-200">{vpdData.vpdAir}</span>
-              <span className="text-xs font-medium text-slate-400">kPa</span>
+              <span className="text-2xl font-bold text-slate-200">{activeZone.temp}°C</span>
+              <span className="text-xs font-medium text-slate-400">/ {activeZone.humidity}% hum</span>
             </div>
           </div>
           <div className="pt-2 border-t border-slate-800/80 grid grid-cols-2 text-[11px] text-slate-400">
             <div>
-              <span className="block text-[10px] text-slate-500">Air / Feuille</span>
-              <span className="font-semibold text-slate-300">{activeZone.temp}° / {(activeZone.temp + leafOffset).toFixed(1)}°</span>
+              <span className="block text-[10px] text-slate-500">T° Feuilles</span>
+              <span className="font-semibold text-slate-300">{(activeZone.temp + leafOffset).toFixed(1)} °C</span>
             </div>
             <div>
-              <span className="block text-[10px] text-slate-500">Humidité</span>
-              <span className="font-semibold text-slate-300">{activeZone.humidity}%</span>
+              <span className="block text-[10px] text-slate-500">Pression</span>
+              <span className="font-semibold text-slate-300">{activeZone.pressure} hPa</span>
             </div>
           </div>
         </div>
@@ -154,23 +154,18 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
       {/* Jauge horizontale avec zones agronomiques */}
       <div className="relative z-10 space-y-2">
         <div className="flex justify-between text-[11px] text-slate-400">
-          <span>0.0 kPa (Saturé)</span>
+          <span>Humide (0.0 kPa)</span>
           <span className="font-mono text-xs text-white font-bold">{vpdData.vpdLeaf} kPa</span>
-          <span>2.0 kPa (Sec)</span>
+          <span>Sec (2.0 kPa)</span>
         </div>
 
         {/* Barre de progression segmentée */}
         <div className="relative h-4 rounded-full overflow-hidden bg-slate-950 border border-slate-800 flex">
-          {/* Zone Danger Faible < 0.4 */}
-          <div className="h-full bg-sky-500/80 border-r border-slate-900" style={{ width: '20%' }} title="Danger Moisi (< 0.4)" />
-          {/* Zone Clones / Semis 0.4 - 0.8 */}
-          <div className="h-full bg-teal-400/80 border-r border-slate-900" style={{ width: '20%' }} title="Semis / Boutures (0.4 - 0.8)" />
-          {/* Zone Croissance 0.8 - 1.05 */}
-          <div className="h-full bg-emerald-400/90 border-r border-slate-900" style={{ width: '12.5%' }} title="Végétatif (0.8 - 1.05)" />
-          {/* Zone Floraison 1.05 - 1.45 */}
-          <div className="h-full bg-amber-400/90 border-r border-slate-900" style={{ width: '20%' }} title="Floraison (1.05 - 1.45)" />
-          {/* Zone Danger Sec > 1.45 */}
-          <div className="h-full bg-rose-500/80" style={{ width: '27.5%' }} title="Danger Stress (> 1.45)" />
+          <div className="h-full bg-sky-500/80 border-r border-slate-900" style={{ width: '20%' }} title="Trop humide (< 0.4)" />
+          <div className="h-full bg-teal-400/80 border-r border-slate-900" style={{ width: '20%' }} title="Semis & Jeunes Pousses (0.4 - 0.8)" />
+          <div className="h-full bg-emerald-400/90 border-r border-slate-900" style={{ width: '12.5%' }} title="Croissance Végétative (0.8 - 1.05)" />
+          <div className="h-full bg-amber-400/90 border-r border-slate-900" style={{ width: '20%' }} title="Floraison Optimale (1.05 - 1.45)" />
+          <div className="h-full bg-rose-500/80" style={{ width: '27.5%' }} title="Trop sec (> 1.45)" />
 
           {/* Curseur de valeur actuelle */}
           <div 
@@ -181,11 +176,11 @@ export const VpdGaugeCard: React.FC<VpdGaugeCardProps> = ({ zones }) => {
 
         {/* Légende des segments */}
         <div className="grid grid-cols-5 text-[9px] font-medium text-center text-slate-400 pt-1">
-          <span className="text-sky-400">Moisi</span>
+          <span className="text-sky-400">Humide</span>
           <span className="text-teal-400">Semis</span>
           <span className="text-emerald-400">Croissance</span>
           <span className="text-amber-400">Floraison</span>
-          <span className="text-rose-400">Stress</span>
+          <span className="text-rose-400">Sec</span>
         </div>
       </div>
     </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { calculatePAR, LUX_TO_PPFD_FACTOR } from '../utils/agronomy';
+import { calculatePAR } from '../utils/agronomy';
 import type { ParResult } from '../utils/agronomy';
-import { Sun, Sparkles, Clock, Layers, ShieldCheck } from 'lucide-react';
+import { Sun, Sparkles, Clock, Layers, CheckCircle } from 'lucide-react';
 
 interface LightSensorData {
   channel: number;
@@ -33,21 +33,21 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white tracking-tight">
-                Éclairage PAR / PPFD & DLI
+                Lumière Utile aux Plantes (PAR / PPFD)
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
-                Barrina T8 5000K (CRI 98+)
+                Spectre 5000K
               </span>
             </div>
-            <p className="text-xs text-slate-400">Spectre fixe non-ajustable (4x 42W V-Shape) · Facteur étalonné ×{LUX_TO_PPFD_FACTOR}</p>
+            <p className="text-xs text-slate-400">Quantité réelle de lumière reçue pour la photosynthèse</p>
           </div>
         </div>
 
-        {/* Sélecteur de photopériode pour calcul du DLI */}
-        <div className="flex items-center gap-1.5 bg-slate-950/70 p-1 rounded-xl border border-slate-800 text-xs">
-          <Clock className="w-3.5 h-3.5 text-slate-400 ml-1.5" />
-          <span className="text-[11px] text-slate-400 mr-1">Photopériode :</span>
+        {/* Sélecteur d'heures d'éclairage pour le calcul de la dose journalière (DLI) */}
+        <div className="flex items-center gap-1.5 bg-slate-950/70 p-1.5 rounded-xl border border-slate-800 text-xs">
+          <Clock className="w-3.5 h-3.5 text-slate-400 ml-1" />
+          <span className="text-[11px] text-slate-400 mr-1">Éclairage / jour :</span>
           {([12, 16, 18] as const).map((h) => (
             <button
               key={h}
@@ -64,9 +64,9 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
         </div>
       </div>
 
-      {/* Grille des 4 Capteurs VEML7700 (Canaux 4, 5, 6, 7) */}
+      {/* Grille des 4 Étagères de Culture */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5 relative z-10">
-        {sensors.map((s) => {
+        {sensors.map((s, index) => {
           const par: ParResult = calculatePAR(s.lux);
           const currentDli = photoperiod === 12 ? par.dli12h : photoperiod === 16 ? par.dli16h : par.dli18h;
           const barPercent = Math.min(100, Math.max(2, (par.ppfd / maxScalePpfd) * 100));
@@ -81,24 +81,25 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
                   <Layers className="w-3.5 h-3.5 text-amber-400/70" />
                   <span className="text-xs font-semibold text-slate-300">{s.label}</span>
                 </div>
-                <span className="text-[10px] font-mono text-slate-500">Canal {s.channel}</span>
+                <span className="text-[10px] font-medium text-slate-400 bg-slate-900 px-2 py-0.5 rounded-full">
+                  Niveau {4 - index}
+                </span>
               </div>
 
-              {/* Valeurs principales : PPFD et Lux calculés */}
+              {/* Valeur Principale PPFD */}
               <div className="flex items-baseline justify-between mb-2">
                 <div>
                   <span className="text-2xl font-black text-amber-400 tracking-tight">
                     {par.ppfd}
                   </span>
-                  <span className="text-[11px] font-medium text-slate-400 ml-1">µmol/m²/s</span>
+                  <span className="text-[11px] font-medium text-slate-400 ml-1.5">µmol/m²/s</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-xs font-mono text-slate-300 font-semibold">{par.lux}</span>
-                  <span className="text-[10px] text-slate-500 ml-1">Lux</span>
+                  <span className="text-xs font-medium text-slate-400">{par.lux} Lux</span>
                 </div>
               </div>
 
-              {/* Jauge d'intensité lumineuse */}
+              {/* Jauge d'intensité */}
               <div className="space-y-1">
                 <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
                   <div 
@@ -107,8 +108,8 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>DLI ({photoperiod}h) : <strong className="text-slate-200">{currentDli}</strong> mol/m²/j</span>
-                  <span className="text-amber-400/80 font-medium">{par.intensityLabel}</span>
+                  <span>Dose journalière : <strong className="text-slate-200">{currentDli}</strong> mol/m²</span>
+                  <span className="text-amber-400/90 font-medium">{par.intensityLabel}</span>
                 </div>
               </div>
             </div>
@@ -116,13 +117,13 @@ export const LightSpectrumCard: React.FC<LightSpectrumCardProps> = ({ sensors })
         })}
       </div>
 
-      {/* Note d'étalonnage spectral fixe */}
+      {/* Note d'explication claire et conviviale */}
       <div className="p-3 rounded-2xl bg-slate-950/40 border border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 relative z-10">
         <div className="flex items-center gap-1.5">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Profil spectral fixe : <strong>Barrina T8 5000K (Pic 450nm + continu 500-680nm)</strong></span>
+          <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Éclairage continu optimisé pour toutes les étapes de croissance des plantes</span>
         </div>
-        <span className="text-amber-400/90 font-mono font-medium">1 µmol/s/m² = 66.7 Lux</span>
+        <span className="text-amber-400/90 font-medium">Lumière photosynthétique</span>
       </div>
     </div>
   );

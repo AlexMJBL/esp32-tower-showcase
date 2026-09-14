@@ -26,9 +26,9 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
   timeRange,
   onTimeRangeChange,
 }) => {
-  const [metricTab, setMetricTab] = useState<'vpd' | 'temp' | 'hum' | 'light' | 'pressure'>('vpd');
+  const [metricTab, setMetricTab] = useState<'vpd' | 'temp' | 'hum' | 'light'>('vpd');
 
-  // Formatage des timestamps sur l'axe X selon la plage sélectionnée
+  // Formatage des timestamps
   const formatTime = (isoString: string) => {
     try {
       const date = new Date(isoString);
@@ -48,12 +48,12 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
         <div>
           <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-emerald-400" />
-            Graphiques d'Historique Multi-Canaux
+            Historique & Évolution Climatique
           </h2>
-          <p className="text-xs text-slate-400">Suivi temporel des conditions agronomiques ({data.length} points)</p>
+          <p className="text-xs text-slate-400">Suivi des conditions sur les différents étages de la tour ({data.length} mesures)</p>
         </div>
 
-        {/* Sélecteur de Métriques */}
+        {/* Sélecteur de Métriques Convivial */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-950/70 rounded-2xl border border-slate-800 text-xs">
           <button
             onClick={() => setMetricTab('vpd')}
@@ -62,7 +62,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
             }`}
           >
             <Gauge className="w-3.5 h-3.5" />
-            VPD (kPa)
+            Transpiration (VPD)
           </button>
           <button
             onClick={() => setMetricTab('temp')}
@@ -89,7 +89,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
             }`}
           >
             <Sun className="w-3.5 h-3.5" />
-            PAR (µmol)
+            Lumière (PAR)
           </button>
         </div>
 
@@ -139,9 +139,9 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
               {/* Plage cible agronomique optimale (0.8 à 1.4 kPa) */}
               <ReferenceArea y1={0.8} y2={1.4} fill="#10b981" fillOpacity={0.08} />
 
-              <Area type="monotone" dataKey="vpd0" name="VPD Zone 0 (Racinaire)" stroke="#10b981" fill="url(#gradVpd0)" strokeWidth={2} />
-              <Area type="monotone" dataKey="vpd1" name="VPD Zone 1 (Médiane)" stroke="#06b6d4" fill="url(#gradVpd1)" strokeWidth={2} />
-              <Area type="monotone" dataKey="vpd2" name="VPD Zone 2 (Canopée)" stroke="#f59e0b" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
+              <Area type="monotone" dataKey="vpd0" name="Étage 1 (Bas / Racines)" stroke="#10b981" fill="url(#gradVpd0)" strokeWidth={2} />
+              <Area type="monotone" dataKey="vpd1" name="Étage 2 (Milieu)" stroke="#06b6d4" fill="url(#gradVpd1)" strokeWidth={2} />
+              <Area type="monotone" dataKey="vpd2" name="Étage 3 (Haut / Canopée)" stroke="#f59e0b" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
             </AreaChart>
           ) : metricTab === 'temp' ? (
             <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -153,9 +153,9 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
                 labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Line type="monotone" dataKey="t0" name="T° AHT Zone 0 (°C)" stroke="#10b981" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="t1" name="T° AHT Zone 1 (°C)" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
-              <Line type="monotone" dataKey="t2" name="T° AHT Zone 2 (°C)" stroke="#f43f5e" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="t0" name="Étage 1 (Bas)" stroke="#10b981" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="t1" name="Étage 2 (Milieu)" stroke="#38bdf8" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="t2" name="Étage 3 (Haut)" stroke="#f43f5e" strokeWidth={2.5} dot={false} />
             </LineChart>
           ) : metricTab === 'hum' ? (
             <AreaChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -167,9 +167,9 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
                 labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Area type="monotone" dataKey="h0" name="Humidité Zone 0 (%)" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
-              <Area type="monotone" dataKey="h1" name="Humidité Zone 1 (%)" stroke="#60a5fa" fill="#60a5fa" fillOpacity={0.1} strokeWidth={2} />
-              <Area type="monotone" dataKey="h2" name="Humidité Zone 2 (%)" stroke="#93c5fd" fill="#93c5fd" fillOpacity={0.1} strokeWidth={2} />
+              <Area type="monotone" dataKey="h0" name="Humidité Étage 1 (%)" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.1} strokeWidth={2} />
+              <Area type="monotone" dataKey="h1" name="Humidité Étage 2 (%)" stroke="#60a5fa" fill="#60a5fa" fillOpacity={0.1} strokeWidth={2} />
+              <Area type="monotone" dataKey="h2" name="Humidité Étage 3 (%)" stroke="#93c5fd" fill="#93c5fd" fillOpacity={0.1} strokeWidth={2} />
             </AreaChart>
           ) : (
             <LineChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
@@ -181,10 +181,10 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
                 labelFormatter={(v) => (v ? new Date(String(v)).toLocaleString() : '')}
               />
               <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
-              <Line type="monotone" dataKey="ppfd4" name="Canal 4 PPFD (µmol)" stroke="#fbbf24" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ppfd5" name="Canal 5 PPFD (µmol)" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ppfd6" name="Canal 6 PPFD (µmol)" stroke="#d97706" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ppfd7" name="Canal 7 PPFD (µmol)" stroke="#b45309" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="ppfd4" name="Lumière Étage 4 (µmol)" stroke="#fbbf24" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="ppfd5" name="Lumière Étage 3 (µmol)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="ppfd6" name="Lumière Étage 2 (µmol)" stroke="#d97706" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="ppfd7" name="Lumière Étage 1 (µmol)" stroke="#b45309" strokeWidth={2} dot={false} />
             </LineChart>
           )}
         </ResponsiveContainer>
@@ -192,8 +192,8 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({
 
       {/* Note d'information sous le graphique */}
       <div className="mt-4 pt-3 border-t border-slate-800/80 flex justify-between items-center text-xs text-slate-500">
-        <span>Bande verte : Zone optimale agronomique (0.8 - 1.4 kPa)</span>
-        <span className="text-emerald-400/90 font-medium">Échantillonnage en continu (Télémétrie active)</span>
+        <span>Zone verte ombrée : Plage idéale de croissance des plantes (0.8 - 1.4 kPa)</span>
+        <span className="text-emerald-400/90 font-medium">Télémétrie en continu</span>
       </div>
     </div>
   );
