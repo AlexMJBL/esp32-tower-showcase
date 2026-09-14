@@ -3,7 +3,6 @@ import { PumpControlCard } from './components/PumpControlCard';
 import { LightControlCard } from './components/LightControlCard';
 import { SensorsGrid } from './components/SensorsGrid';
 import type { ZoneSensorReading } from './components/SensorsGrid';
-import { WaterStatusCard } from './components/WaterStatusCard';
 import { LoginModal } from './components/LoginModal';
 import { VpdGaugeCard } from './components/VpdGaugeCard';
 import { LightSpectrumCard } from './components/LightSpectrumCard';
@@ -93,14 +92,6 @@ export function App() {
     { channel: 7, label: 'Étage 1 (Bas)', lux: 4.61 },
   ]);
 
-  const [waterSensors] = useState({
-    floatSwitchState: true,
-    waterDetector1: false,
-    waterDetector2: false,
-    waterDetector3: false,
-    waterDetector4: false,
-    isPumpRunning: false,
-  });
 
   // Historique de télémétrie
   const [historyData, setHistoryData] = useState<TelemetryPoint[]>(generateSeedHistory());
@@ -349,22 +340,7 @@ export function App() {
               <SensorsGrid zones={zoneReadings} />
             </div>
 
-            {/* LIGNE 3 : STATUT HYDRAULIQUE & SÉCURITÉ */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-sky-400" />
-                  Sécurité Hydraulique & Réservoir
-                </h2>
-              </div>
-              <WaterStatusCard 
-                floatSwitchState={waterSensors.floatSwitchState}
-                waterDetector1={waterSensors.waterDetector1}
-                waterDetector2={waterSensors.waterDetector2}
-                waterDetector3={waterSensors.waterDetector3}
-                waterDetector4={waterSensors.waterDetector4}
-              />
-            </div>
+
           </div>
         )}
 
