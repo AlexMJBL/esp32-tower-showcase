@@ -70,13 +70,15 @@ float convertLuxToPPFD(float lux) {
   return lux * 0.0150;
 }
 
-// Connexion Wi-Fi simple et directe (identique à votre test réussi)
+// Connexion Wi-Fi simple et directe (avec puissance RF stabilisée pour éviter les chutes de tension)
 void connectWiFi() {
   Serial.println();
   Serial.print("Connexion au reseau : ");
   Serial.println(WIFI_SSID);
 
   WiFi.mode(WIFI_STA);
+  // Stabilise la consommation electrique pour eviter les baisses de tension
+  WiFi.setTxPower(WIFI_POWER_15dBm);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int retries = 0;
@@ -152,10 +154,14 @@ void sendTelemetryToSupabase() {
 
 void setup() {
   Serial.begin(115200);
-  delay(1500);
+  delay(500);
 
   Serial.println("\n--- INITIALISATION DU SYSTEME ---");
 
+  // 1. WI-FI EN TOUT PREMIER (avant d'alimenter les 7 capteurs pour eviter la chute de tension 3.3V)
+  connectWiFi();
+
+  // 2. INITIALISATION I2C ET CAPTEURS
   // Vos broches 18 et 19 avec pull-up
   pinMode(SDA_PIN, INPUT_PULLUP);
   pinMode(SCL_PIN, INPUT_PULLUP);
@@ -201,9 +207,6 @@ void setup() {
       Serial.printf("  -> VEML (sur SD%d) : NON DETECTE (0x10)\n", ch);
     }
   }
-
-  // Connexion Wi-Fi
-  connectWiFi();
 
   Serial.println("\n--- FIN DU CHECK MATERIEL, DEBUT DES LECTURES ---\n");
   delay(1000);
