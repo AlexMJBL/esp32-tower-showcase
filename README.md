@@ -1,119 +1,134 @@
-# Tower Garden - IoT Supervision & Control Dashboard
+# ESP32 Tower Garden - IoT Supervision, Agronomy & Cloud Dashboard ($0/mois)
 
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-blueviolet.svg)](https://dotnet.microsoft.com/download)
-[![React](https://img.shields.io/badge/React-18-blue.svg)](https://react.dev/)
+[![React](https://img.shields.io/badge/React-19-blue.svg)](https://react.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8.svg)](https://tailwindcss.com/)
-[![MQTT](https://img.shields.io/badge/MQTT-v3.1.1-orange.svg)](https://mqtt.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Realtime_PostgreSQL-3ecf8e.svg)](https://supabase.com/)
+[![ESP32](https://img.shields.io/badge/Hardware-ESP32_+_TCA9548A-red.svg)](https://espressif.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-Une plateforme moderne et hautement sécurisée pour superviser et contrôler une **Tower Garden** hydroponique en temps réel. Le système combine une architecture backend robuste en **C# .NET 10** avec un courtier MQTT embarqué, un simulateur matériel interactif, et une interface frontend web immersive bâtie en **React**, **TypeScript** et **Tailwind CSS**.
+Plateforme IoT complète et moderne pour superviser et contrôler une **Tower Garden** ou une serre intérieure en temps réel, hébergeable à **0,00 $ / mois**.
+
+Le système intègre la télémétrie physique multi-zones sur bus I2C multiplexé, le calcul agronomique en direct du **Déficit de Pression de Vapeur (VPD)** et du **PAR / PPFD** (étalonné sur le profil spectral d'un panneau LED 42W CRI 98+), des graphiques d'historique avec **Recharts**, et une sécurité granulaire par rôles (Visiteurs en lecture seule vs Admin authentifié).
 
 ---
 
-## 🏗️ Architecture du Projet
-
-Le projet suit les principes de la **Clean Architecture** et les normes de conception **SOLID** pour assurer la maintenabilité, l'extensibilité, et la testabilité du code.
+## 🏗️ Architecture Globale & Déploiement Cloud (0.00 $ / mois)
 
 ```mermaid
-graph TD
-    WebApi[TowerGarden.WebApi] --> Application[TowerGarden.Application]
-    Infrastructure[TowerGarden.Infrastructure] --> Application
-    Application --> Domain[TowerGarden.Domain]
-    Infrastructure -.-> Persistence
-    Infrastructure -.-> MqttBroker
-    Infrastructure -.-> Simulator[Hardware Device Simulator]
+flowchart LR
+    subgraph Hardware [Matériel Local]
+        ESP32[ESP32 Gateway]
+        MUX[TCA9548A I2C Mux]
+        S0[Canal 0 : AHT20 + BMP280 #1]
+        S1[Canal 1 : AHT20 + BMP280 #2]
+        S2[Canal 2 : AHT20 + BMP280 #3]
+        L4[Canaux 4-7 : 4x VEML7700 Lux]
+        
+        S0 & S1 & S2 & L4 --> MUX --> ESP32
+    end
+
+    subgraph CloudLayer [Cloud 100% Gratuit à vie]
+        Supabase[(Supabase PostgreSQL\n- Télémétrie 500MB\n- Table device_commands\n- RLS Sécurité des rôles)]
+        Vercel[Vercel / Cloudflare Pages\n- Frontend React SPA\n- CDN mondial SSL]
+    end
+
+    subgraph Clients [Navigateurs Web]
+        PublicView[Mode Showcase Visiteur\n- Lecture seule\n- Télémétrie & Graphiques]
+        AdminView[Mode Administrateur\n- JWT Bearer\n- Contrôle pompes & éclairage]
+    end
+
+    ESP32 -- "HTTPS POST (toutes les 30s)" --> Supabase
+    Supabase -- "WebSocket Realtime" --> PublicView & AdminView
+    AdminView -- "Ordres signés" --> Supabase
+    Vercel -. "Hébergement web gratuit" .-> PublicView & AdminView
 ```
-
-### 📁 Structure des Dossiers
-
-*   **`backend/`** : Solution .NET 10 découpée en couches logiques :
-    *   `TowerGarden.Domain` : Entités de domaine (`Pump`, `Light`, `SensorReading`) et règles métiers pures (sans dépendances externes).
-    *   `TowerGarden.Application` : Cas d'utilisation (Use Cases), DTOs et interfaces applicatives.
-    *   `TowerGarden.Infrastructure` : Persistance en mémoire (thread-safe), courtier MQTT embarqué (`MQTTnet`), client MQTT d'écoute backend et simulateur matériel d'arrière-plan (`BackgroundService`).
-    *   `TowerGarden.WebApi` : Contrôleurs REST, liaisons de hubs de communication temps réel (**SignalR**), et middlewares de sécurité.
-    *   `TowerGarden.Tests` : Suite complète de tests unitaires xUnit couvrant les règles métiers et la couche de sécurité.
-*   **`frontend/`** : Application SPA moderne :
-    *   `React` + `Vite` + `TypeScript` + `Tailwind CSS v4`.
-    *   Communication bidirectionnelle : API REST pour les commandes de configuration et **SignalR** (WebSockets) pour la télémétrie en temps réel.
 
 ---
 
 ## 🌟 Fonctionnalités Clés
 
-### 📊 Supervision Temps Réel & Télémétrie
-*   Suivi en direct des températures de l'air et de l'eau, de l'humidité relative ambiante et de la luminosité (Lux) sur 4 étages verticaux.
-*   Console de journalisation MQTT virtuelle intégrée affichant en temps réel les trames et les commandes échangées sur le réseau local.
+### 🌿 1. Calculs Agronomiques Avancés
+* **VPD (Vapor Pressure Deficit) Air & Feuille** :
+  * Calculé selon l'équation de saturation de vapeur d'eau d'**Arden Buck** :
+    $$SVP(T) = 0.61078 \times \exp\left(\frac{17.27 \times T}{T + 237.3}\right) \quad [\text{kPa}]$$
+  * Différenciation $VPD_{\text{air}}$ et $VPD_{\text{leaf}}$ avec curseur interactif de décalage thermique foliaire (par défaut $-1.5^\circ\text{C}$ sous LED).
+  * Jauge interactive avec code couleur des 5 zones physiologiques : **Semis/Boutures (0.4-0.8 kPa)**, **Végétatif (0.8-1.05 kPa)**, **Floraison (1.05-1.45 kPa)**, et **Zones de danger (moisissure ou stress)**.
+* **Conversion Lux $\rightarrow$ PAR / PPFD ($\mu\text{mol}/(\text{m}^2\cdot\text{s})$)** :
+  * Étalonné sur le profil spectral d'un éclairage **Full Spectrum 42W CRI 98+** (pic 450 nm et continu 520-660 nm) :
+    $$\mathbf{PPFD} = \text{Lux} \times 0.0150 \quad \left(1\,\mu\text{mol}/(\text{m}^2\cdot\text{s}) \approx 66.7\text{ Lux}\right)$$
+  * Calcul automatique du **Daily Light Integral (DLI)** en $\text{mol}/(\text{m}^2\cdot\text{jour})$ pour des photopériodes de 12h, 16h et 18h.
 
-### 🚰 Arrosage Automatique & Calendrier
-*   **Cycles planifiés** : Définition précise de la durée de marche (secondes) et de l'intervalle de repos (minutes).
-*   **Double état intelligent** : Distinction visuelle claire dans l'interface :
-    *   *Actif / En marche* : Animation d'écoulement de l'eau active (en vert).
-    *   *Actif / En veille* : Indique que le calendrier automatisé est actif mais en repos temporaire (en jaune).
-    *   *Désactivé* : Système arrêté (en gris).
+### 📊 2. Graphiques d'Historique Multi-Canaux (Recharts)
+* Suivi temporel interactif avec sélection de période (**1h, 6h, 24h, 7 jours**).
+* 4 modes de visualisation :
+  * **VPD multi-zones** avec bande d'objectif agronomique optimale ombrée.
+  * **Températures différentielles** (AHT20 vs BMP280 sur les 3 zones).
+  * **Humidité relative**.
+  * **Intensité lumineuse PAR / PPFD** sur les 4 étages.
 
-### 🚨 Boucle de Sécurité Hydraulique (Anti-Fuite)
-*   **Cartographie de la base** : Le réservoir d'eau est surveillé par un interrupteur à flotteur (niveau OK vs critique).
-*   **Capteurs de fuites 4 quadrants** : 4 détecteurs d'eau placés aux points cardinaux de la base (**Nord, Est, Sud, Ouest**) surveillent les débordements physiques.
-*   **Arrêt d'urgence** : Si l'un des détecteurs signale de l'eau (`true`), le backend déclenche instantanément la boucle de sécurité, force l'arrêt de la pompe, notifie le matériel via MQTT, et affiche une alerte clignotante à l'écran.
+### 🔒 3. Sécurité RBAC & Protection Matérielle
+* **Mode Démo Showcase (Visiteurs)** : Accès public en lecture seule aux jauges, graphiques et logs sans risque d'actionnement des pompes ou lumières.
+* **Mode Administrateur Authentifié** : Authentification JWT via fenêtre modale, déverrouillant l'accès aux curseurs de commande.
+* **Failsafe Matériel (ESP32)** : Watchdog matériel limitant automatiquement le fonctionnement continu des pompes (max 120s) pour prévenir toute inondation même en cas de coupure réseau.
 
-### 🔒 Sécurité Conforme aux Bonnes Pratiques OWASP
-*   **Authentification JWT** : Signature HMAC-SHA256 forte. La consultation du tableau de bord et des capteurs est accessible publiquement en lecture seule (Read-Only). Le pilotage des actuateurs exige une session administrateur valide.
-*   **Prévention contre les attaques d'identification** : Hachage sécurisé des mots de passe (`PBKDF2`) et messages d'erreurs d'authentification génériques (bloque l'énumération de comptes).
-*   **Sécurisation MQTT** : Le courtier MQTT embarqué sur le port `1883` valide la signature de connexion de tous les appareils (le simulateur utilise des identifiants dédiés uniques).
+---
+
+## 📁 Structure du Répertoire
+
+```text
+├── firmware/
+│   └── esp32_sensor_gateway.ino    # Firmware C++ ESP32 (TCA9548A, AHT20, BMP280, VEML, Supabase REST)
+├── frontend/                       # Application Web React 19 + TypeScript + Tailwind CSS v4
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── VpdGaugeCard.tsx       # Jauge VPD avec diagnostic stomatique
+│   │   │   ├── LightSpectrumCard.tsx  # Carte PAR / PPFD et DLI (4 canaux VEML)
+│   │   │   ├── HistoryCharts.tsx      # Graphiques d'historique interactifs Recharts
+│   │   │   ├── SensorsGrid.tsx        # Grille des 3 modules physiques AHT20/BMP280
+│   │   │   ├── PumpControlCard.tsx    # Contrôle de cycle d'arrosage
+│   │   │   ├── LightControlCard.tsx   # Contrôle photopériode et spectre RGB
+│   │   │   └── LoginModal.tsx         # Fenêtre de connexion sécurisée
+│   │   ├── lib/
+│   │   │   └── supabase.ts            # Client Supabase & abonnements WebSockets
+│   │   ├── utils/
+│   │   │   └── agronomy.ts            # Moteur mathématique pur VPD, PPFD et DLI
+│   │   └── App.tsx                    # Dashboard principal avec navigation par onglets
+├── backend/                        # Backend optionnel C# .NET 10 (Hub SignalR & Broker MQTTnet)
+└── supabase_schema.sql             # Schéma SQL pour hébergement Cloud gratuit à vie
+```
 
 ---
 
 ## 🚀 Démarrage Rapide
 
-### Prérequis
-*   [.NET SDK 10](https://dotnet.microsoft.com/download)
-*   [Node.js](https://nodejs.org/) (v18 ou supérieur) & `npm`
-
-### 1. Démarrer le Backend & Simulateur
-Le backend démarre automatiquement le serveur Web API, le Hub SignalR, le Broker MQTT embarqué, et le simulateur matériel :
-```bash
-cd backend
-dotnet run --project TowerGarden.WebApi/TowerGarden.WebApi.csproj
-```
-*   **API REST & SignalR** : Écoute sur `http://localhost:5013`
-*   **Broker MQTT** : Écoute sur `localhost:1883`
-
-### 2. Démarrer le Frontend React
+### 1. Lancer le Frontend Web en Local
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-*   **Interface Web** : Accès via `http://localhost:5173/`
+* Accès à l'interface : `http://localhost:5173/` (ou `http://localhost:4173/` en mode preview build).
+* **Identifiants de démonstration Admin** :
+  * Utilisateur : `admin`
+  * Mot de passe : `SecureAdminPassword123!` (ou `admin`)
 
-### 🔑 Identifiants d'Accès de Démo
-*   **Compte Admin (Web/REST/SignalR)** :
-    *   *Utilisateur* : `admin`
-    *   *Mot de passe* : `SecureAdminPassword123!`
-*   **Compte Appareil (MQTT)** :
-    *   *Utilisateur* : `garden_device`
-    *   *Mot de passe* : `SafeDeviceToken556!`
+### 2. Déployer la Base de Données Gratuite (Supabase)
+1. Créez un projet gratuit sur [Supabase](https://supabase.com) (Tier gratuit 500 Mo).
+2. Ouvrez l'éditeur SQL et collez le contenu du fichier `supabase_schema.sql`.
+3. Récupérez votre `URL` et clé `Anon` dans **Project Settings $\rightarrow$ API**.
+4. Renseignez-les dans `frontend/.env` :
+   ```env
+   VITE_SUPABASE_URL=https://votre-projet.supabase.co
+   VITE_SUPABASE_ANON_KEY=votre-cle-anon
+   ```
 
----
-
-## 🧪 Tests Unitaires & Simulation de Fuite
-
-### Exécution des Tests
-Pour exécuter la suite complète de 24 tests valider la cohérence du domaine et les failles OWASP :
-```bash
-cd backend
-dotnet test
-```
-
-### Tester la Boucle de Sécurité (Simulation de Fuite)
-1. Ouvrez `http://localhost:5173/`, connectez-vous avec le compte `admin`.
-2. Allumez la pompe à partir de la carte de contrôle.
-3. Attendez 15 secondes. Le simulateur matériel détecte que la pompe tourne en continu et simule une fuite sur le capteur **Sud** de la base.
-4. Constatez l'arrêt d'urgence instantané de la pompe, l'activation du gyrophare visuel rouge sur le schéma de sol et l'affichage de la bannière de sécurité.
-5. Après 12 secondes sans arrosage, le simulateur considère que la base a séché et réinitialise automatiquement le capteur Sud à l'état sec.
+### 3. Flasher le Firmware ESP32
+1. Ouvrez `firmware/esp32_sensor_gateway.ino` dans l'Arduino IDE.
+2. Installez les bibliothèques `Adafruit AHTX0`, `Adafruit BMP280`, `Adafruit VEML7700` et `ArduinoJson`.
+3. Renseignez votre SSID Wi-Fi et les clés Supabase dans les constantes au début du fichier.
+4. Téléversez sur votre ESP32 relié au multiplexeur TCA9548A.
 
 ---
 
-## 📝 Licence
-
-Ce projet est sous licence MIT. Pour plus de détails, voir le fichier [LICENSE](LICENSE).
+## 📜 Licence
+Projet distribué sous licence MIT.

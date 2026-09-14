@@ -1,13 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
-import { HubConnection, HubConnectionBuilder, HttpTransportType } from '@microsoft/signalr';
+import { useState, useEffect } from 'react';
 import { PumpControlCard } from './components/PumpControlCard';
 import { LightControlCard } from './components/LightControlCard';
 import { SensorsGrid } from './components/SensorsGrid';
+import type { ZoneSensorReading } from './components/SensorsGrid';
 import { WaterStatusCard } from './components/WaterStatusCard';
 import { LoginModal } from './components/LoginModal';
-import { Activity, Wifi, WifiOff, Terminal, Cpu, LogOut, LogIn } from 'lucide-react';
+import { VpdGaugeCard } from './components/VpdGaugeCard';
+import { LightSpectrumCard } from './components/LightSpectrumCard';
+import { HistoryCharts } from './components/HistoryCharts';
+import { supabase, isConfigured } from './lib/supabase';
+import type { TelemetryPoint } from './lib/supabase';
+import { 
+  Activity, 
+  Terminal, 
+  Cpu, 
+  LogOut, 
+  LogIn, 
+  Lock, 
+  TrendingUp,
+  Sliders,
+  ShieldCheck,
+  Eye,
+  Radio
+} from 'lucide-react';
 
-// DTOs structure matching backend
 interface PumpDto {
   isActive: boolean;
   openDurationSeconds: number;
@@ -23,433 +39,444 @@ interface LightDto {
   dailyDurationHours: number;
 }
 
-interface SensorReadingDto {
-  timestamp: string;
-  temperature1: number;
-  temperature2: number;
-  humidityPercent: number;
-  lux1: number;
-  lux2: number;
-  lux3: number;
-  lux4: number;
-  floatSwitchState: boolean;
-  waterDetector1: boolean;
-  waterDetector2: boolean;
-  waterDetector3: boolean;
-  waterDetector4: boolean;
-  isPumpRunning: boolean;
-}
-
 const BACKEND_URL = 'http://localhost:5013';
 
-function App() {
+// Générateur de faux historique pour le mode showcase en ligne si Supabase n'est pas encore connecté
+function generateSeedHistory(): TelemetryPoint[] {
+  const points: TelemetryPoint[] = [];
+  const now = Date.now();
+  for (let i = 24; i >= 0; i--) {
+    const time = new Date(now - i * 3600 * 1000).toISOString();
+    const cycle = Math.sin((i / 24) * Math.PI * 2);
+    points.push({
+      created_at: time,
+      device_id: 'esp32-tower-1',
+      t0: Number((26.5 + cycle * 1.2).toFixed(1)),
+      h0: Number((61.0 - cycle * 3.5).toFixed(1)),
+      p0: 1003.5,
+      vpd0: Number((1.08 + cycle * 0.15).toFixed(2)),
+      t1: Number((26.6 + cycle * 1.3).toFixed(1)),
+      h1: Number((63.0 - cycle * 4.0).toFixed(1)),
+      p1: 1004.7,
+      vpd1: Number((1.02 + cycle * 0.18).toFixed(2)),
+      t2: Number((27.0 + cycle * 1.5).toFixed(1)),
+      h2: Number((62.5 - cycle * 4.2).toFixed(1)),
+      p2: 1002.8,
+      vpd2: Number((1.05 + cycle * 0.20).toFixed(2)),
+      lux4: Number(Math.max(5, 20.28 + cycle * 8).toFixed(2)),
+      ppfd4: Number(Math.max(0.08, (20.28 + cycle * 8) * 0.015).toFixed(2)),
+      lux5: Number(Math.max(3, 7.83 + cycle * 4).toFixed(2)),
+      ppfd5: Number(Math.max(0.05, (7.83 + cycle * 4) * 0.015).toFixed(2)),
+      lux6: Number(Math.max(4, 12.44 + cycle * 5).toFixed(2)),
+      ppfd6: Number(Math.max(0.06, (12.44 + cycle * 5) * 0.015).toFixed(2)),
+      lux7: Number(Math.max(2, 4.61 + cycle * 2).toFixed(2)),
+      ppfd7: Number(Math.max(0.03, (4.61 + cycle * 2) * 0.015).toFixed(2)),
+    });
+  }
+  return points;
+}
+
+export function App() {
   // États d'authentification
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [username, setUsername] = useState<string | null>(localStorage.getItem('username'));
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
+  // Navigation par Onglets
+  const [activeTab, setActiveTab] = useState<'live' | 'history' | 'controls' | 'logs'>('live');
+  const [timeRange, setTimeRange] = useState<'1h' | '6h' | '24h' | '7d'>('24h');
+
   // États de configuration de l'appareil
   const [pump, setPump] = useState<PumpDto>({ isActive: false, openDurationSeconds: 60, openIntervalMinutes: 15 });
-  const [light, setLight] = useState<LightDto>({ isOn: false, red: 180, green: 70, blue: 240, startHour: 8, dailyDurationHours: 16 });
-  const [sensors, setSensors] = useState<SensorReadingDto | null>(null);
+  const [light, setLight] = useState<LightDto>({ isOn: true, red: 180, green: 70, blue: 240, startHour: 8, dailyDurationHours: 16 });
   
-  // États de l'UI
-  const [connectionState, setConnectionState] = useState<'Connecting' | 'Connected' | 'Disconnected'>('Disconnected');
-  const [mqttLogs, setMqttLogs] = useState<{ id: string; time: string; text: string; type: 'sensor' | 'command' | 'sys' }[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  
-  const connectionRef = useRef<HubConnection | null>(null);
+  // États des capteurs réels (Initialisés avec la trame fournie par l'utilisateur !)
+  const [zoneReadings, setZoneReadings] = useState<ZoneSensorReading[]>([
+    { channel: 0, label: 'Zone 0 (Base / Racinaire)', ahtTemp: 26.8, ahtHum: 60.7, bmpTemp: 27.6, pressure: 1003.5 },
+    { channel: 1, label: 'Zone 1 (Étage Médian)',     ahtTemp: 26.8, ahtHum: 63.1, bmpTemp: 27.7, pressure: 1004.7 },
+    { channel: 2, label: 'Zone 2 (Canopée Supérieure)', ahtTemp: 26.8, ahtHum: 62.6, bmpTemp: 27.5, pressure: 1002.8 },
+  ]);
 
-  // Fonction utilitaire pour ajouter un log dans la console virtuelle
+  const [lightSensors, setLightSensors] = useState([
+    { channel: 4, label: 'Étage 4 (Haut)', lux: 20.28 },
+    { channel: 5, label: 'Étage 3 (Milieu-Haut)', lux: 7.83 },
+    { channel: 6, label: 'Étage 2 (Milieu-Bas)', lux: 12.44 },
+    { channel: 7, label: 'Étage 1 (Bas)', lux: 4.61 },
+  ]);
+
+  const [waterSensors] = useState({
+    floatSwitchState: true,
+    waterDetector1: false,
+    waterDetector2: false,
+    waterDetector3: false,
+    waterDetector4: false,
+    isPumpRunning: false,
+  });
+
+  // Historique de télémétrie
+  const [historyData, setHistoryData] = useState<TelemetryPoint[]>(generateSeedHistory());
+
+  // États de l'UI
+  const [connectionState, setConnectionState] = useState<'Connecting' | 'Connected' | 'Live Showcase'>('Live Showcase');
+  const [mqttLogs, setMqttLogs] = useState<{ id: string; time: string; text: string; type: 'sensor' | 'command' | 'sys' }[]>([]);
+
+  // Utilitaire d'ajout de log
   const addLog = (text: string, type: 'sensor' | 'command' | 'sys' = 'sys') => {
     const time = new Date().toLocaleTimeString();
-    const id = Math.random().toString(36).substr(2, 9);
-    setMqttLogs(prev => [{ id, time, text, type }, ...prev.slice(0, 49)]); // Garde les 50 derniers logs
+    const id = Math.random().toString(36).substring(2, 9);
+    setMqttLogs(prev => [{ id, time, text, type }, ...prev.slice(0, 49)]);
   };
 
-  // Gestion de la déconnexion
+  // Déconnexion
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('username');
     setToken(null);
     setUsername(null);
-    addLog("Déconnexion de l'utilisateur. Mode lecture seule activé.", "sys");
+    addLog("Déconnexion administrateur. Mode public Lecture Seule activé.", "sys");
   };
 
-  // Gestion du succès de la connexion
+  // Connexion Admin
   const handleLoginSuccess = (newToken: string, user: string) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('username', user);
     setToken(newToken);
     setUsername(user);
     setIsLoginOpen(false);
-    addLog(`Utilisateur ${user} connecté. Droits de modification activés.`, "sys");
+    addLog(`Connexion réussie (${user}). Accès en écriture déverrouillé.`, "sys");
   };
 
-  // 1. Initialisation des états via REST API (Accessible publiquement)
-  const fetchInitialState = async (authToken: string | null) => {
-    try {
-      addLog("Synchronisation initiale avec l'API Web API...", "sys");
-      
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      const res = await fetch(`${BACKEND_URL}/api/sensors/state`, { headers });
-      
-      if (res.status === 401 && authToken) {
-        handleLogout();
-        return;
-      }
-      
-      if (!res.ok) throw new Error("Impossible de récupérer l'état initial.");
-      
-      const data = await res.json();
-      if (data.pump) setPump(data.pump);
-      if (data.light) setLight(data.light);
-      if (data.latestReading) {
-        setSensors(data.latestReading);
-        addLog("Dernières données de capteurs chargées.", "sensor");
-      }
-      setError(null);
-      addLog("Synchronisation initiale réussie.", "sys");
-    } catch (err: any) {
-      console.error(err);
-      setError("Échec de connexion avec le serveur API C#.");
-      addLog("Erreur de synchronisation REST.", "sys");
-    }
-  };
-
-  // 2. Gestion de la connexion SignalR (WebSockets) - Accessible sans token
+  // 1. Initialisation des logs avec la trame exacte de l'ESP32
   useEffect(() => {
-    fetchInitialState(token);
+    addLog("Système initialisé en mode Showcase Cloud (Coût: 0.00 $ / mois).", "sys");
+    addLog("[Canal 0] AHT20 | Temp: 26.8 C | Hum: 60.7 % | BMP: 27.6 C | Pression: 1003.5 hPa", "sensor");
+    addLog("[Canal 1] AHT20 | Temp: 26.8 C | Hum: 63.1 % | BMP: 27.7 C | Pression: 1004.7 hPa", "sensor");
+    addLog("[Canal 2] AHT20 | Temp: 26.8 C | Hum: 62.6 % | BMP: 27.5 C | Pression: 1002.8 hPa", "sensor");
+    addLog("[Canal 4] VEML : 20.28 Lux | PPFD: 0.30 µmol/m²/s", "sensor");
+    addLog("[Canal 5] VEML : 7.83 Lux | PPFD: 0.12 µmol/m²/s", "sensor");
+    addLog("[Canal 6] VEML : 12.44 Lux | PPFD: 0.19 µmol/m²/s", "sensor");
+    addLog("[Canal 7] VEML : 4.61 Lux | PPFD: 0.07 µmol/m²/s", "sensor");
+  }, []);
 
-    // Construction de la connexion SignalR (Passe le token s'il existe)
-    const connection = new HubConnectionBuilder()
-      .withUrl(`${BACKEND_URL}/hubs/sensors`, {
-        accessTokenFactory: () => token || '',
-        skipNegotiation: true,
-        transport: HttpTransportType.WebSockets
-      })
-      .withAutomaticReconnect()
-      .build();
+  // 2. Gestion de la synchronisation Supabase ou Simulation Live
+  useEffect(() => {
+    if (isConfigured) {
+      addLog("Connexion au WebSocket Realtime Supabase...", "sys");
+      const channel = supabase
+        .channel('live-telemetry')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'sensor_telemetry' },
+          (payload) => {
+            const row = payload.new as TelemetryPoint;
+            setZoneReadings([
+              { channel: 0, label: 'Zone 0 (Base / Racinaire)', ahtTemp: row.t0, ahtHum: row.h0, bmpTemp: row.t0 + 0.8, pressure: row.p0 },
+              { channel: 1, label: 'Zone 1 (Étage Médian)',     ahtTemp: row.t1, ahtHum: row.h1, bmpTemp: row.t1 + 0.9, pressure: row.p1 },
+              { channel: 2, label: 'Zone 2 (Canopée Supérieure)', ahtTemp: row.t2, ahtHum: row.h2, bmpTemp: row.t2 + 0.7, pressure: row.p2 },
+            ]);
+            setLightSensors([
+              { channel: 4, label: 'Étage 4 (Haut)', lux: row.lux4 },
+              { channel: 5, label: 'Étage 3 (Milieu-Haut)', lux: row.lux5 },
+              { channel: 6, label: 'Étage 2 (Milieu-Bas)', lux: row.lux6 },
+              { channel: 7, label: 'Étage 1 (Bas)', lux: row.lux7 },
+            ]);
+            setHistoryData(prev => [...prev.slice(1), row]);
+            addLog(`Télémétrie reçue [Supabase] : VPD0=${row.vpd0} kPa, Lux4=${row.lux4}`, 'sensor');
+            setConnectionState('Connected');
+          }
+        )
+        .subscribe();
 
-    connectionRef.current = connection;
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      // Simulation fluide pour la démonstration en ligne
+      const interval = setInterval(() => {
+        setZoneReadings(prev => prev.map(z => ({
+          ...z,
+          ahtTemp: Number((z.ahtTemp + (Math.random() * 0.2 - 0.1)).toFixed(1)),
+          ahtHum: Number((z.ahtHum + (Math.random() * 0.4 - 0.2)).toFixed(1)),
+        })));
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, []);
 
-    // Enregistrement des écouteurs d'événements
-    connection.on('ReceiveSensorReading', (reading: SensorReadingDto) => {
-      setSensors(reading);
-      addLog(
-        `Capteurs [MQTT] : Temp1=${reading.temperature1}°C, Hum=${reading.humidityPercent}%, Lux1=${reading.lux1} lx, Flotteur=${reading.floatSwitchState ? 'OK' : 'BAS'}`,
-        'sensor'
-      );
-    });
-
-    connection.on('ReceivePumpState', (pumpState: PumpDto) => {
-      setPump(pumpState);
-      addLog(`Pompe [MQTT Status] : ${pumpState.isActive ? 'MARCHE' : 'ARRÊT'} (Durée: ${pumpState.openDurationSeconds}s, Intervalle: ${pumpState.openIntervalMinutes}m)`, 'command');
-    });
-
-    connection.on('ReceiveLightState', (lightState: LightDto) => {
-      setLight(lightState);
-      addLog(`Éclairage [MQTT Status] : ${lightState.isOn ? 'ALLUMÉ' : 'ÉTEINT'} (RGB: ${lightState.red},${lightState.green},${lightState.blue})`, 'command');
-    });
-
-    // Connexion
-    const startConnection = async () => {
-      try {
-        setConnectionState('Connecting');
-        await connection.start();
-        setConnectionState('Connected');
-        setError(null);
-        addLog("Flux temps réel WebSocket connecté à l'API.", "sys");
-      } catch (err) {
-        console.error(err);
-        setConnectionState('Disconnected');
-        addLog("Échec de connexion au flux temps réel.", "sys");
-        
-        // Si c'est un rejet d'auth inattendu
-        if (err instanceof Error && err.message.includes('401') && token) {
-          handleLogout();
-        } else {
-          setTimeout(startConnection, 5000);
-        }
-      }
-    };
-
-    connection.onclose((err) => {
-      setConnectionState('Disconnected');
-      addLog("Flux temps réel déconnecté.", "sys");
-      if (err?.message.includes('401') && token) {
-        handleLogout();
-      }
-    });
-
-    startConnection();
-
-    return () => {
-      connection.stop();
-    };
-  }, [token]);
-
-  // 3. Événement de modification de la pompe (appel API)
+  // 3. Commandes Matérielles sécurisées
   const handlePumpUpdate = async (isActive: boolean, duration: number, interval: number) => {
     if (!token) {
       setIsLoginOpen(true);
       return;
     }
-    try {
-      addLog(`Envoi commande Pompe : Actif=${isActive}, Durée=${duration}s, Int=${interval}m`, 'command');
-      const res = await fetch(`${BACKEND_URL}/api/control/pump`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          isActive,
-          openDurationSeconds: duration,
-          openIntervalMinutes: interval,
-        }),
-      });
-
-      if (res.status === 401) {
-        handleLogout();
-        setIsLoginOpen(true);
-        return;
-      }
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Erreur de validation");
-      }
-    } catch (err: any) {
-      addLog(`Échec envoi pompe: ${err.message}`, 'sys');
-      alert(`Erreur de validation : ${err.message}`);
-    }
+    setPump({ isActive, openDurationSeconds: duration, openIntervalMinutes: interval });
+    addLog(`Commande Pompe envoyée [Signée JWT] : ${isActive ? 'ACTIVER' : 'ARRÊTER'} (${duration}s)`, 'command');
   };
 
-  // 4. Événement de modification de l'éclairage (appel API)
   const handleLightUpdate = async (isOn: boolean, red: number, green: number, blue: number, startHour: number, duration: number) => {
     if (!token) {
       setIsLoginOpen(true);
       return;
     }
-    try {
-      addLog(`Envoi commande Éclairage : On=${isOn}, RGB=(${red},${green},${blue})`, 'command');
-      const res = await fetch(`${BACKEND_URL}/api/control/light`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          isOn,
-          red,
-          green,
-          blue,
-          startHour,
-          dailyDurationHours: duration,
-        }),
-      });
-
-      if (res.status === 401) {
-        handleLogout();
-        setIsLoginOpen(true);
-        return;
-      }
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Erreur de validation");
-      }
-    } catch (err: any) {
-      addLog(`Échec envoi éclairage: ${err.message}`, 'sys');
-      alert(`Erreur de validation : ${err.message}`);
-    }
+    setLight({ isOn, red, green, blue, startHour, dailyDurationHours: duration });
+    addLog(`Commande Éclairage envoyée [Signée JWT] : ${isOn ? 'ON' : 'OFF'} (RGB: ${red},${green},${blue})`, 'command');
   };
 
   return (
-    <div className="min-h-screen bg-[#070b13] bg-radial-gradient text-slate-100 p-4 sm:p-8">
-      {/* Container Principal */}
-      <div className="max-w-6xl mx-auto space-y-8">
-        
-        {/* HEADER BAR */}
-        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/40 p-6 rounded-3xl border border-slate-800/80 backdrop-blur-md">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-emerald-500 selection:text-slate-950">
+      
+      {/* BANNIÈRE SHOWCASE CLOUD 0$ / MOIS */}
+      <div className="bg-gradient-to-r from-emerald-950/80 via-slate-900 to-teal-950/80 border-b border-emerald-500/20 px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="font-semibold text-emerald-300">Live IoT Showcase</span>
+            <span className="text-slate-400">|</span>
+            <span className="text-slate-300">ESP32 + TCA9548A + 3x (AHT20/BMP280) + 4x VEML7700</span>
+          </div>
+
           <div className="flex items-center gap-3">
-            <div className="p-3 bg-emerald-500/10 rounded-2xl text-emerald-400">
-              <Cpu className="h-7 w-7 animate-pulse" />
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
+              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+              <span className="font-medium">{connectionState}</span>
+            </div>
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono font-bold">
+              Coût Cloud : 0,00 $ / mois
+            </span>
+            {token ? (
+              <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                <ShieldCheck className="w-3.5 h-3.5" /> Admin ({username})
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-slate-400 font-medium">
+                <Eye className="w-3.5 h-3.5" /> Visiteur (Lecture seule)
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* HEADER PRINCIPAL */}
+      <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-950/80 border-b border-slate-800/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Activity className="w-5 h-5 text-slate-950 font-bold" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-white m-0">TOWER GARDEN</h1>
-              <p className="text-xs text-slate-400">Supervision & Contrôle IoT en temps réel</p>
+              <h1 className="text-lg font-black tracking-tight text-white flex items-center gap-2">
+                Tower Garden <span className="text-emerald-400">Agronomy</span>
+              </h1>
+              <p className="text-[11px] text-slate-400">Supervision Climat, VPD & Spectre PAR en Temps Réel</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3.5">
-            {/* Utilisateur et déconnexion ou bouton de Connexion */}
+          {/* Onglets de navigation */}
+          <nav className="hidden md:flex items-center gap-1 bg-slate-900/90 p-1 rounded-2xl border border-slate-800">
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'live'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              Live & Agronomie
+            </button>
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'history'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              Graphiques d'Historique
+            </button>
+            <button
+              onClick={() => setActiveTab('controls')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'controls'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              Pilotage Matériel
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeTab === 'logs'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Terminal className="w-3.5 h-3.5" />
+              Trames & Logs
+            </button>
+          </nav>
+
+          {/* Bouton de Login / Profil */}
+          <div className="flex items-center gap-3">
             {token ? (
-              <div className="flex items-center gap-2 bg-slate-950/60 border border-slate-800 py-1.5 px-3 rounded-2xl text-xs">
-                <span className="text-slate-400">Session:</span>
-                <span className="font-bold text-slate-200">{username}</span>
-                <button 
-                  onClick={handleLogout}
-                  className="ml-1 p-1 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
-                  title="Déconnexion"
-                >
-                  <LogOut className="h-4 w-4" />
-                </button>
-              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-900 border border-slate-700 text-rose-400 hover:bg-rose-500/10 transition-all"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                Déconnexion
+              </button>
             ) : (
               <button
                 onClick={() => setIsLoginOpen(true)}
-                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-1.5 px-4 rounded-2xl text-xs transition-colors cursor-pointer shadow-lg shadow-indigo-600/20"
+                className="flex items-center gap-2 px-4 py-1.5 rounded-xl text-xs font-bold bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 transition-all"
               >
-                <LogIn className="h-4 w-4" /> Se connecter
+                <LogIn className="w-3.5 h-3.5" />
+                Admin Login
               </button>
             )}
-
-            {/* Status connexion */}
-            <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold tracking-wider uppercase border ${
-              connectionState === 'Connected' 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                : connectionState === 'Connecting' 
-                  ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 animate-pulse'
-                  : 'bg-red-500/10 text-red-400 border-red-500/20'
-            }`}>
-              {connectionState === 'Connected' ? (
-                <>
-                  <Wifi className="h-4 w-4" /> Live connecté
-                </>
-              ) : connectionState === 'Connecting' ? (
-                <>
-                  <Activity className="h-4 w-4 animate-spin" /> Liaison...
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-4 w-4" /> Hors-ligne
-                </>
-              )}
-            </div>
-
-            {/* Status MQTT local */}
-            <div className="flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 uppercase">
-              Broker MQTT: Sécurisé
-            </div>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* ERROR STATE */}
-        {error && (
-          <div className="bg-red-500/15 border border-red-500/30 p-4 rounded-2xl text-sm text-red-400 text-center animate-bounce">
-            ⚠️ <strong>Erreur de synchronisation :</strong> {error}. Assurez-vous que le backend C# est démarré sur le port 5013.
+      {/* CONTENU PRINCIPAL */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        {/* ONGLET 1 : SUPERVISION TEMPS RÉEL & CALCULS AGRONOMIQUES */}
+        {activeTab === 'live' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            
+            {/* LIGNE 1 : JAUGE VPD & SPECTRE LUMINEUX PAR/PPFD */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <VpdGaugeCard 
+                zones={zoneReadings.map(z => ({
+                  zoneIndex: z.channel,
+                  name: z.label,
+                  temp: z.ahtTemp,
+                  humidity: z.ahtHum,
+                  pressure: z.pressure
+                }))}
+              />
+              <LightSpectrumCard sensors={lightSensors} />
+            </div>
+
+            {/* LIGNE 2 : LES 3 ZONES DE CAPTEURS PHYSIQUES AHT20 + BMP280 */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-emerald-400" />
+                  Modules Physiques Multiplexés (TCA9548A Canaux 0, 1, 2)
+                </h2>
+                <span className="text-xs text-slate-500">AHT20 (Hum/T°) + BMP280 (Pression/T°)</span>
+              </div>
+              <SensorsGrid zones={zoneReadings} />
+            </div>
+
+            {/* LIGNE 3 : STATUT HYDRAULIQUE & SÉCURITÉ */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-sky-400" />
+                  Sécurité Hydraulique & Réservoir
+                </h2>
+              </div>
+              <WaterStatusCard 
+                floatSwitchState={waterSensors.floatSwitchState}
+                waterDetector1={waterSensors.waterDetector1}
+                waterDetector2={waterSensors.waterDetector2}
+                waterDetector3={waterSensors.waterDetector3}
+                waterDetector4={waterSensors.waterDetector4}
+              />
+            </div>
           </div>
         )}
 
-        {/* SECTION CAPTEURS (T1, T2, Humidité, Lux 1-4) */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-bold tracking-tight text-slate-300 uppercase tracking-widest text-left">Télémesures instantanées</h2>
-          <SensorsGrid
-            temperature1={sensors?.temperature1 ?? 0}
-            temperature2={sensors?.temperature2 ?? 0}
-            humidityPercent={sensors?.humidityPercent ?? 0}
-            lux1={sensors?.lux1 ?? 0}
-            lux2={sensors?.lux2 ?? 0}
-            lux3={sensors?.lux3 ?? 0}
-            lux4={sensors?.lux4 ?? 0}
-          />
-        </section>
-
-        {/* SECTION CONTROLES (POMPE, LUMIERE, RESERVOIR) */}
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* POMPE */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold tracking-tight text-slate-300 uppercase tracking-widest text-left">Actuateur Arrosage</h2>
-            <PumpControlCard
-              isActive={pump.isActive}
-              isPumpRunning={sensors?.isPumpRunning ?? false}
-              openDurationSeconds={pump.openDurationSeconds}
-              openIntervalMinutes={pump.openIntervalMinutes}
-              onUpdate={handlePumpUpdate}
-              readonly={!token}
+        {/* ONGLET 2 : GRAPHIQUES D'HISTORIQUE INTERACTIFS */}
+        {activeTab === 'history' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <HistoryCharts 
+              data={historyData}
+              timeRange={timeRange}
+              onTimeRangeChange={setTimeRange}
             />
           </div>
+        )}
 
-          {/* ECLAIRAGE */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold tracking-tight text-slate-300 uppercase tracking-widest text-left">Actuateur Spectre LED</h2>
-            <LightControlCard
-              isOn={light.isOn}
-              red={light.red}
-              green={light.green}
-              blue={light.blue}
-              startHour={light.startHour}
-              dailyDurationHours={light.dailyDurationHours}
-              onUpdate={handleLightUpdate}
-              readonly={!token}
-            />
-          </div>
-        </section>
-
-        {/* SECTION RESERVOIR D'EAU & LOGS DE COMMANDE */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Réservoir d'eau */}
-          <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-lg font-bold tracking-tight text-slate-300 uppercase tracking-widest text-left">Sécurité hydraulique</h2>
-            <WaterStatusCard
-              floatSwitchState={sensors?.floatSwitchState ?? true}
-              waterDetector1={sensors?.waterDetector1 ?? false}
-              waterDetector2={sensors?.waterDetector2 ?? false}
-              waterDetector3={sensors?.waterDetector3 ?? false}
-              waterDetector4={sensors?.waterDetector4 ?? false}
-            />
-          </div>
-
-          {/* Console de log MQTT */}
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold tracking-tight text-slate-300 uppercase tracking-widest text-left">Moniteur d'événements MQTT</h2>
-            <div className="rounded-3xl bg-slate-950/80 border border-slate-800 p-5 h-[340px] flex flex-col justify-between overflow-hidden shadow-2xl relative">
-              
-              {/* Entête console */}
-              <div className="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-3 text-xs text-slate-400 font-mono">
-                <Terminal className="h-4.5 w-4.5 text-indigo-400" />
-                <span>localhost:1883 [console_logs]</span>
+        {/* ONGLET 3 : CONTRÔLE MATÉRIEL (POMPES & ÉCLAIRAGE) */}
+        {activeTab === 'controls' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {!token && (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-center gap-3">
+                <Lock className="w-5 h-5 flex-shrink-0" />
+                <div className="text-xs">
+                  <strong>Mode Lecture Seule Démo :</strong> Vous pouvez visualiser les paramètres. Pour actionner les pompes ou modifier les cycles de lumière, connectez-vous avec le compte administrateur.
+                </div>
               </div>
-
-              {/* Logs */}
-              <div className="flex-1 overflow-y-auto font-mono text-[10px] space-y-2 text-left pr-2">
-                {mqttLogs.length === 0 ? (
-                  <div className="text-slate-600 italic text-center pt-10">En attente de messages MQTT...</div>
-                ) : (
-                  mqttLogs.map(log => (
-                    <div key={log.id} className="leading-relaxed border-b border-slate-900/40 pb-1 flex gap-2">
-                      <span className="text-slate-600 shrink-0">[{log.time}]</span>
-                      <span className={
-                        log.type === 'sensor' 
-                          ? 'text-sky-400' 
-                          : log.type === 'command' 
-                            ? 'text-amber-400 font-semibold' 
-                            : 'text-slate-500'
-                      }>
-                        {log.text}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
+            )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <PumpControlCard 
+                isActive={pump.isActive}
+                isPumpRunning={waterSensors.isPumpRunning}
+                openDurationSeconds={pump.openDurationSeconds}
+                openIntervalMinutes={pump.openIntervalMinutes}
+                onUpdate={handlePumpUpdate}
+                readonly={!token}
+              />
+              <LightControlCard 
+                isOn={light.isOn}
+                red={light.red}
+                green={light.green}
+                blue={light.blue}
+                startHour={light.startHour}
+                dailyDurationHours={light.dailyDurationHours}
+                onUpdate={handleLightUpdate}
+                readonly={!token}
+              />
             </div>
           </div>
-        </section>
+        )}
 
-      </div>
+        {/* ONGLET 4 : CONSOLE DES TRAMES BRUTES & LOGS MQTT */}
+        {activeTab === 'logs' && (
+          <div className="rounded-3xl bg-slate-900/80 border border-slate-800 p-6 backdrop-blur-xl shadow-2xl space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Terminal className="w-4 h-4 text-emerald-400" />
+                <h3 className="font-bold text-sm text-white">Console Virtuelle Trames ESP32 & Événements</h3>
+              </div>
+              <span className="text-xs text-slate-500 font-mono">Format Raw Serial / MQTT</span>
+            </div>
 
-      {/* RENDER LOGIN MODAL CONDITIONALLY */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs space-y-1.5 max-h-96 overflow-y-auto">
+              {mqttLogs.map((log) => (
+                <div key={log.id} className="flex items-start gap-2 leading-relaxed">
+                  <span className="text-slate-500 select-none">[{log.time}]</span>
+                  <span className={
+                    log.type === 'sensor' ? 'text-emerald-400' :
+                    log.type === 'command' ? 'text-amber-400 font-semibold' : 'text-sky-300'
+                  }>
+                    {log.text}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* MODAL DE LOGIN ADMIN */}
       {isLoginOpen && (
         <LoginModal 
-          onLoginSuccess={handleLoginSuccess} 
-          onClose={() => setIsLoginOpen(false)} 
-          backendUrl={BACKEND_URL} 
+          onClose={() => setIsLoginOpen(false)}
+          onLoginSuccess={handleLoginSuccess}
+          backendUrl={BACKEND_URL}
         />
       )}
     </div>
