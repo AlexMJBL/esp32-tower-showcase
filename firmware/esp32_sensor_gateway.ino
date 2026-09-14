@@ -142,6 +142,9 @@ void connectWiFi() {
   // Secours pour les modems Hitron / Fizz si le serveur DHCP tarde à attribuer l'IP :
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("\n[Wi-Fi] DHCP lent ou bloqué sur la box. Essai avec IP fixe directe (192.168.0.195)...");
+    WiFi.disconnect(true);
+    delay(300);
+
     IPAddress local_IP(192, 168, 0, 195);
     IPAddress gateway(192, 168, 0, 1);
     IPAddress subnet(255, 255, 255, 0);
@@ -149,6 +152,7 @@ void connectWiFi() {
     IPAddress dns2(8, 8, 8, 8);
 
     WiFi.config(local_IP, gateway, subnet, dns1, dns2);
+    delay(150);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
     unsigned long retryStart = millis();
