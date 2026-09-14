@@ -92,11 +92,25 @@ CREATE POLICY "Device update commands"
     USING (true);
 
 -- 4. Publication Realtime pour WebSockets (diffusion en direct vers le Frontend)
-BEGIN;
-  -- Supprimer pour récréer proprement si déjà présent
-  DROP PUBLICATION IF EXISTS supabase_realtime;
-  CREATE PUBLICATION supabase_realtime FOR TABLE public.sensor_telemetry, public.device_commands;
-COMMIT;
+DO $$
+BEGIN
+  -- Ajout sécurisé des tables à la publication Realtime Supabase
+  IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+    CREATE PUBLICATION supabase_realtime;
+  END IF;
+  
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.sensor_telemetry;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.device_commands;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+END $$;
 
 -- 5. Données initiales (Seed avec votre trame matérielle réelle)
 INSERT INTO public.sensor_telemetry (
