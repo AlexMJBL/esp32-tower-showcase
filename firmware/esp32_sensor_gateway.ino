@@ -122,7 +122,7 @@ void scanAvailableNetworks() {
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
-  WiFi.disconnect(true);
+  WiFi.disconnect();
   delay(100);
   WiFi.mode(WIFI_STA);
   delay(100);
@@ -132,7 +132,9 @@ void connectWiFi() {
   WiFi.setAutoReconnect(true);
 
   Serial.printf("\n[Wi-Fi] Connexion au réseau '%s' (MAC ESP32: %s)...\n", WIFI_SSID, WiFi.macAddress().c_str());
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  // Connexion (Canal 11 détecté lors du scan pour accélérer l'association)
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD, 11);
 
   unsigned long startAttempt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 20000) {
