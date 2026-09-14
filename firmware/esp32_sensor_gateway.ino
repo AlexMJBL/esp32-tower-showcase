@@ -1,265 +1,177 @@
-/**
- * ==============================================================================
- * FIRMWARE ESP32 : TOWER GARDEN / GREENHOUSE TELEMETRY & CONTROL GATEWAY
- * ==============================================================================
- * Matériel :
- * - Microcontrôleur : ESP32 (NodeMCU / DevKit v1)
- * - Multiplexeur I2C : TCA9548A (Adresse 0x70)
- *   - Canal 0 : Module AHT20 + BMP280 #1 (Zone 0 - Racinaire / Base)
- *   - Canal 1 : Module AHT20 + BMP280 #2 (Zone 1 - Médian)
- *   - Canal 2 : Module AHT20 + BMP280 #3 (Zone 2 - Canopée / Haut)
- *   - Canal 4 : Capteur de lumière VEML7700 #1 (Étage 4)
- *   - Canal 5 : Capteur de lumière VEML7700 #2 (Étage 3)
- *   - Canal 6 : Capteur de lumière VEML7700 #3 (Étage 2)
- *   - Canal 7 : Capteur de lumière VEML7700 #4 (Étage 1)
- *
- * Cloud :
- * - Supabase REST API (HTTPS TLS 1.2 / 1.3 avec WiFiClientSecure)
- * - Envoi automatique toutes les 30 secondes
- * - Récupération et exécution des commandes admin sécurisées (avec Watchdog)
- * ==============================================================================
- */
-
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Wire.h>
-#include <ArduinoJson.h>
 #include <Adafruit_AHTX0.h>
 #include <Adafruit_BMP280.h>
 #include <Adafruit_VEML7700.h>
 
-// 1. CONFIGURATION WI-FI & SUPABASE (Charge automatiquement credentials.h local si présent)
-#if __has_include("credentials.h")
-  #include "credentials.h"
-#else
-  const char* WIFI_SSID     = "VOTRE_WIFI_SSID";
-  const char* WIFI_PASSWORD = "VOTRE_WIFI_PASSWORD";
-  const char* SUPABASE_URL  = "https://votre-projet.supabase.co";
-  const char* SUPABASE_KEY  = "votre-cle-anon-publique";
-#endif
+#define TCA_ADDR 0x70
 
-// Identifiant de l'appareil
+// Vos broches I2C physiques exactes
+#define SDA_PIN 18
+#define SCL_PIN 19
+
+// Vos identifiants Wi-Fi
+const char* WIFI_SSID     = "JuiceWrld";
+const char* WIFI_PASSWORD = "Tesjulie1992";
+
+// Clés d'accès Supabase Cloud
+const char* SUPABASE_URL  = "https://dulwyxrcjskexkbewjcp.supabase.co";
+const char* SUPABASE_KEY  = "sb_publishable_7iLfDazDdkRxq_H2tLKgVg_hI2Sa9p_";
 const char* DEVICE_ID     = "esp32-tower-1";
 
-// Intervalle d'échantillonnage (30 secondes)
-const unsigned long TELEMETRY_INTERVAL_MS = 30000;
+// Intervalle d'envoi vers Supabase (toutes les 15 secondes)
+const unsigned long TELEMETRY_INTERVAL_MS = 15000;
 unsigned long lastTelemetryTime = 0;
 
-// Adresse I2C du multiplexeur TCA9548A
-#define TCA9548A_ADDR 0x70
-
-// Broches Relais / Actionneurs (Réservées pour développement futur de l'irrigation)
-#define PIN_PUMP_RELAY  25
-#define PIN_LIGHT_PWM   26
-
-// Instances des bibliothèques de capteurs
+// Instances des capteurs
 Adafruit_AHTX0   aht;
 Adafruit_BMP280   bmp;
 Adafruit_VEML7700 veml;
 
-// Structure pour stocker les mesures des zones
-struct ZoneReading {
-  float tempAHT;
-  float humAHT;
-  float tempBMP;
-  float pressureBMP;
-  float vpd;
-};
+// Mémoire des mesures
+float t_aht[3] = {26.8, 26.8, 26.8};
+float h_aht[3] = {60.0, 60.0, 60.0};
+float t_bmp[3] = {27.0, 27.0, 27.0};
+float p_bmp[3] = {1003.0, 1003.0, 1003.0};
+float vpd_val[3] = {1.0, 1.0, 1.0};
 
-struct LightReading {
-  float lux;
-  float ppfd;
-};
+float lux_val[4] = {0.0, 0.0, 0.0, 0.0};
+float ppfd_val[4] = {0.0, 0.0, 0.0, 0.0};
 
-ZoneReading zones[3];
-LightReading lights[4]; // Canaux 4, 5, 6, 7
-
-// ==============================================================================
-// GESTION DU MULTIPLEXEUR TCA9548A
-// ==============================================================================
-void selectI2CChannel(uint8_t channel) {
+// Sélection du canal sur le TCA9548A
+void selectTCAChannel(uint8_t channel) {
   if (channel > 7) return;
-  Wire.beginTransmission(TCA9548A_ADDR);
+  Wire.beginTransmission(TCA_ADDR);
   Wire.write(1 << channel);
   Wire.endTransmission();
-  delay(10); // Court délai pour stabilisation du bus
+  delay(10);
 }
 
-// ==============================================================================
-// CALCULS SCIENTIFIQUES & AGRONOMIQUES
-// ==============================================================================
-
-/**
- * Calcul du VPD Feuille selon la formule d'Arden Buck
- * leafOffset : Décalage thermique sous éclairage LED (-1.5°C recommandé)
- */
+// Calcul agronomique du VPD Feuille (Arden Buck)
 float calculateVPD(float tempAir, float humPercent, float leafOffset = -1.5) {
   if (humPercent <= 0.0) humPercent = 0.1;
   if (humPercent > 100.0) humPercent = 100.0;
 
-  // Pression de saturation de l'air
   float svpAir = 0.61078 * exp((17.27 * tempAir) / (tempAir + 237.3));
-  // Pression de vapeur réelle de l'air
   float vpa = svpAir * (humPercent / 100.0);
 
-  // Pression de saturation à la surface de la feuille
   float tempLeaf = tempAir + leafOffset;
   float svpLeaf = 0.61078 * exp((17.27 * tempLeaf) / (tempLeaf + 237.3));
 
-  // VPD réel foliaire
   float vpd = svpLeaf - vpa;
   return (vpd < 0.0) ? 0.0 : vpd;
 }
 
-/**
- * Facteur de conversion pour le spectre fixe Barrina T8 5000K (42W CRI 98+)
- * 1 µmol/(m²·s) ≈ 66.7 Lux  -> Facteur = 0.0150
- */
+// Facteur de conversion Lux -> PAR/PPFD (Spectre 5000K Barrina T8 : 1 µmol/s/m² ≈ 66.7 Lux)
 float convertLuxToPPFD(float lux) {
   if (lux < 0) lux = 0;
   return lux * 0.0150;
 }
 
-// ==============================================================================
-// INITIALISATION DU MATÉRIEL
-// ==============================================================================
-void setup() {
-  Serial.begin(115200);
-  delay(1000);
-  Serial.println("\n--- Démarrage ESP32 Tower Garden Gateway ---");
-
-  // Initialisation I2C (SDA=21, SCL=22 par défaut sur ESP32)
-  Wire.begin();
-
-  // Configuration des broches actionneurs
-  pinMode(PIN_PUMP_RELAY, OUTPUT);
-  digitalWrite(PIN_PUMP_RELAY, LOW); // Pompe éteinte au boot
-
-  // Initialisation des modules AHT20 et BMP280 sur les canaux 0, 1, 2
-  for (uint8_t ch = 0; ch <= 2; ch++) {
-    selectI2CChannel(ch);
-    Serial.printf("[Canal %d] Init AHT20 & BMP280...\n", ch);
-
-    if (!aht.begin()) {
-      Serial.printf("  [!] AHT20 introuvable sur canal %d\n", ch);
-    }
-
-    // IMPORTANT : Correctif pour le bug de calibration BMP280 (notamment canal 0 à 769 hPa)
-    if (bmp.begin(0x76) || bmp.begin(0x77)) {
-      // Forcer un suréchantillonnage et un filtre IIR stable
-      bmp.setSampling(Adafruit_BMP280::MODE_NORMAL,
-                      Adafruit_BMP280::SAMPLING_X2,     // Température
-                      Adafruit_BMP280::SAMPLING_X16,    // Pression ultra haute résolution
-                      Adafruit_BMP280::FILTER_X16,      // Filtrage du bruit
-                      Adafruit_BMP280::STANDBY_MS_500);
-      Serial.printf("  [OK] BMP280 calibré sur canal %d\n", ch);
-    } else {
-      Serial.printf("  [!] BMP280 introuvable sur canal %d\n", ch);
-    }
+// Nom lisible du protocole de sécurité Wi-Fi
+const char* getAuthModeName(wifi_auth_mode_t authMode) {
+  switch (authMode) {
+    case WIFI_AUTH_OPEN: return "Ouvert (Sans mot de passe)";
+    case WIFI_AUTH_WEP: return "WEP";
+    case WIFI_AUTH_WPA_PSK: return "WPA-PSK";
+    case WIFI_AUTH_WPA2_PSK: return "WPA2-PSK (Standard OK)";
+    case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2 Mixte";
+    case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2-Enterprise";
+    case WIFI_AUTH_WPA3_PSK: return "WPA3-PSK (Incompatible ESP32 pur !)";
+    case WIFI_AUTH_WPA2_WPA3_PSK: return "WPA2/WPA3 Transition";
+    default: return "Inconnu";
   }
-
-  // Initialisation des VEML7700 sur les canaux 4, 5, 6, 7
-  for (uint8_t ch = 4; ch <= 7; ch++) {
-    selectI2CChannel(ch);
-    Serial.printf("[Canal %d] Init VEML7700...\n", ch);
-    if (veml.begin()) {
-      veml.setGain(VEML7700_GAIN_1_8);      // Adapté pour forte lumière / LED
-      veml.setIntegrationTime(VEML7700_IT_100MS);
-      Serial.printf("  [OK] VEML7700 prêt sur canal %d\n", ch);
-    } else {
-      Serial.printf("  [!] VEML7700 introuvable sur canal %d\n", ch);
-    }
-  }
-
-  // Connexion Wi-Fi
-  connectWiFi();
 }
 
-// ==============================================================================
-// CONNEXION WI-FI AVEC RECONNEXION AUTOMATIQUE
-// ==============================================================================
+// Scan des réseaux 2.4 GHz pour diagnostic instantané
+void scanAvailableNetworks() {
+  Serial.println("\n[Diagnostic Wi-Fi] Scan des réseaux 2.4 GHz captés par l'ESP32...");
+  int n = WiFi.scanNetworks();
+  if (n == 0) {
+    Serial.println("  [!] Aucun réseau 2.4 GHz détecté à portée.");
+  } else {
+    Serial.printf("  -> %d réseaux trouvés :\n", n);
+    bool foundTarget = false;
+    for (int i = 0; i < n; ++i) {
+      String s = WiFi.SSID(i);
+      int32_t r = WiFi.RSSI(i);
+      int32_t ch = WiFi.channel(i);
+      wifi_auth_mode_t auth = WiFi.encryptionType(i);
+      Serial.printf("     * SSID: %-22s | Canal: %2d | Signal: %3d dBm | Sécurité: %s\n", 
+                    s.c_str(), ch, r, getAuthModeName(auth));
+      if (s.equalsIgnoreCase(WIFI_SSID)) {
+        foundTarget = true;
+        if (auth == WIFI_AUTH_WPA3_PSK) {
+          Serial.println("       >>> ATTENTION : 'JuiceWrld' est configuré en WPA3 strict ! L'ESP32 nécessite WPA2-PSK.");
+        }
+      }
+    }
+    if (foundTarget) {
+      Serial.printf("  [OK] Votre réseau '%s' est bien présent en 2.4 GHz !\n", WIFI_SSID);
+    } else {
+      Serial.printf("  [ALERTE CRITIQUE] '%s' est TOTALEMENT INTROUVABLE en 2.4 GHz !\n", WIFI_SSID);
+      Serial.println("  Cause n°1 : Votre routeur diffuse en 5 GHz uniquement (l'ESP32 ne capte QUE le 2.4 GHz).");
+      Serial.println("  Solution  : Activez la bande 2.4 GHz dans l'interface de votre box/routeur.");
+    }
+  }
+}
+
+// Connexion Wi-Fi avec diagnostic précis
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
-  Serial.printf("Connexion au Wi-Fi '%s'...", WIFI_SSID);
+
+  WiFi.disconnect(true);
+  delay(100);
   WiFi.mode(WIFI_STA);
+  delay(100);
+  
+  // TRÈS IMPORTANT : Désactive la mise en veille radio qui fait échouer la négociation DHCP sur les box modernes
+  WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
+
+  Serial.printf("\n[Wi-Fi] Connexion au réseau '%s' (MAC ESP32: %s)...\n", WIFI_SSID, WiFi.macAddress().c_str());
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   unsigned long startAttempt = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 15000) {
+  while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 20000) {
     delay(500);
     Serial.print(".");
   }
 
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[Wi-Fi] Connecté ! IP: %s\n", WiFi.localIP().toString().c_str());
+    Serial.printf("\n[Wi-Fi] Connecté avec succès ! IP locale : %s | Signal : %d dBm\n", 
+                  WiFi.localIP().toString().c_str(), WiFi.RSSI());
   } else {
-    Serial.println("\n[Wi-Fi] Échec de connexion. Nouvelle tentative au prochain cycle.");
+    wl_status_t st = WiFi.status();
+    Serial.print("\n[Wi-Fi Échec] ");
+    switch (st) {
+      case WL_NO_SSID_AVAIL:
+        Serial.println("SSID INTROUVABLE ! L'antenne de l'ESP32 ne capte pas 'JuiceWrld' (Vérifiez que la bande 2.4 GHz est activée sur la box).");
+        break;
+      case WL_CONNECT_FAILED:
+        Serial.println("ÉCHEC AUTHENTIFICATION ! Mot de passe refusé ou cryptage WPA3 incompatible (Basculez en WPA2-PSK dans la box).");
+        break;
+      case WL_DISCONNECTED:
+        Serial.println("DÉCONNECTÉ (Délai d'attente dépassé ou rejet par le routeur).");
+        break;
+      case WL_IDLE_STATUS:
+        Serial.println("STATUT EN ATTENTE (La négociation avec le routeur n'a pas abouti).");
+        break;
+      default:
+        Serial.printf("Code d'état : %d\n", st);
+        break;
+    }
   }
 }
 
-// ==============================================================================
-// LECTURE DE TOUS LES CAPTEURS
-// ==============================================================================
-void readAllSensors() {
-  // 1. Canaux 0, 1, 2 : AHT20 + BMP280
-  for (uint8_t ch = 0; ch <= 2; ch++) {
-    selectI2CChannel(ch);
-    sensors_event_t humidity, temp;
-    
-    if (aht.getEvent(&humidity, &temp)) {
-      zones[ch].tempAHT = temp.temperature;
-      zones[ch].humAHT = humidity.relative_humidity;
-    } else {
-      zones[ch].tempAHT = 26.8;
-      zones[ch].humAHT = 60.0;
-    }
-
-    zones[ch].tempBMP = bmp.readTemperature();
-    float rawPressure = bmp.readPressure() / 100.0F; // hPa
-    
-    // Détection de valeur erronée (ex: 769.6 hPa s'il s'agit de mmHg -> convertit en ~1026 hPa)
-    if (rawPressure < 850.0 && rawPressure > 600.0) {
-      zones[ch].pressureBMP = rawPressure * 1.33322; // Conversion mmHg -> hPa
-    } else {
-      zones[ch].pressureBMP = rawPressure;
-    }
-
-    // Calcul du VPD feuille
-    zones[ch].vpd = calculateVPD(zones[ch].tempAHT, zones[ch].humAHT, -1.5);
-  }
-
-  // 2. Canaux 4, 5, 6, 7 : VEML7700
-  for (uint8_t ch = 4; ch <= 7; ch++) {
-    selectI2CChannel(ch);
-    float lux = veml.readLux();
-    if (isnan(lux) || lux < 0) lux = 0;
-    
-    uint8_t idx = ch - 4;
-    lights[idx].lux = lux;
-    lights[idx].ppfd = convertLuxToPPFD(lux);
-  }
-
-  // Impression des données sur le port Série (format identique à votre affichage de référence)
-  for (int i = 0; i < 3; i++) {
-    Serial.printf("[Canal %d] Module AHT+BMP #%d :\n", i, i + 1);
-    Serial.printf("   AHT20  | Temp: %.1f C | Hum: %.1f %%\n", zones[i].tempAHT, zones[i].humAHT);
-    Serial.printf("   BMP280 | Temp: %.1f C | Pression: %.1f hPa | VPD: %.2f kPa\n", zones[i].tempBMP, zones[i].pressureBMP, zones[i].vpd);
-  }
-  for (int i = 0; i < 4; i++) {
-    Serial.printf("[Canal %d] VEML :\n", i + 4);
-    Serial.printf("   Luminosite: %.2f Lux | PPFD: %.2f µmol/m²/s\n", lights[i].lux, lights[i].ppfd);
-  }
-}
-
-// ==============================================================================
-// ENVOI DE LA TÉLÉMÉTRIE VERS SUPABASE (REST API HTTPS)
-// ==============================================================================
+// Envoi HTTPS vers Supabase
 void sendTelemetryToSupabase() {
   if (WiFi.status() != WL_CONNECTED) return;
 
   WiFiClientSecure client;
-  client.setInsecure(); // Pour simplifier sans certificat racine local, chiffrement TLS conservé
+  client.setInsecure(); // Chiffrement TLS sans validation de certificat lourd
 
   HTTPClient http;
   String endpoint = String(SUPABASE_URL) + "/rest/v1/sensor_telemetry";
@@ -270,123 +182,169 @@ void sendTelemetryToSupabase() {
   http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
   http.addHeader("Prefer", "return=minimal");
 
-  // Construction du JSON
-  StaticJsonDocument<512> doc;
-  doc["device_id"] = DEVICE_ID;
-  
-  doc["t0"] = zones[0].tempAHT;
-  doc["h0"] = zones[0].humAHT;
-  doc["p0"] = zones[0].pressureBMP;
-  doc["vpd0"] = zones[0].vpd;
+  char jsonBuf[512];
+  snprintf(jsonBuf, sizeof(jsonBuf),
+    "{"
+      "\"device_id\":\"%s\","
+      "\"t0\":%.2f,\"h0\":%.2f,\"p0\":%.2f,\"vpd0\":%.2f,"
+      "\"t1\":%.2f,\"h1\":%.2f,\"p1\":%.2f,\"vpd1\":%.2f,"
+      "\"t2\":%.2f,\"h2\":%.2f,\"p2\":%.2f,\"vpd2\":%.2f,"
+      "\"lux4\":%.2f,\"ppfd4\":%.2f,"
+      "\"lux5\":%.2f,\"ppfd5\":%.2f,"
+      "\"lux6\":%.2f,\"ppfd6\":%.2f,"
+      "\"lux7\":%.2f,\"ppfd7\":%.2f"
+    "}",
+    DEVICE_ID,
+    t_aht[0], h_aht[0], p_bmp[0], vpd_val[0],
+    t_aht[1], h_aht[1], p_bmp[1], vpd_val[1],
+    t_aht[2], h_aht[2], p_bmp[2], vpd_val[2],
+    lux_val[0], ppfd_val[0],
+    lux_val[1], ppfd_val[1],
+    lux_val[2], ppfd_val[2],
+    lux_val[3], ppfd_val[3]
+  );
 
-  doc["t1"] = zones[1].tempAHT;
-  doc["h1"] = zones[1].humAHT;
-  doc["p1"] = zones[1].pressureBMP;
-  doc["vpd1"] = zones[1].vpd;
-
-  doc["t2"] = zones[2].tempAHT;
-  doc["h2"] = zones[2].humAHT;
-  doc["p2"] = zones[2].pressureBMP;
-  doc["vpd2"] = zones[2].vpd;
-
-  doc["lux4"] = lights[0].lux;
-  doc["ppfd4"] = lights[0].ppfd;
-
-  doc["lux5"] = lights[1].lux;
-  doc["ppfd5"] = lights[1].ppfd;
-
-  doc["lux6"] = lights[2].lux;
-  doc["ppfd6"] = lights[2].ppfd;
-
-  doc["lux7"] = lights[3].lux;
-  doc["ppfd7"] = lights[3].ppfd;
-
-  String jsonString;
-  serializeJson(doc, jsonString);
-
-  int httpCode = http.POST(jsonString);
-  if (httpCode == 201 || httpCode == 200 || httpCode == 204) {
-    Serial.println("[Supabase] Télémétrie transmise avec succès !");
+  int httpCode = http.POST((uint8_t*)jsonBuf, strlen(jsonBuf));
+  if (httpCode == 200 || httpCode == 201 || httpCode == 204) {
+    Serial.println("\n>>> [Supabase] Mesures enregistrées dans le Cloud avec succès !");
   } else {
-    Serial.printf("[Supabase] Erreur HTTP POST : %d\n", httpCode);
+    Serial.printf("\n[Supabase] Erreur HTTP POST : %d (Vérifiez la table Supabase)\n", httpCode);
   }
   http.end();
 }
 
-// ==============================================================================
-// GESTION DES COMMANDES SÉCURISÉES (WATCHDOG MATÉRIEL INCLUS)
-// ==============================================================================
-void checkPendingCommands() {
-  if (WiFi.status() != WL_CONNECTED) return;
+void setup() {
+  Serial.begin(115200);
+  delay(1500);
 
-  WiFiClientSecure client;
-  client.setInsecure();
-  HTTPClient http;
+  Serial.println("\n--- INITIALISATION DU SYSTEME ---");
 
-  // Récupère la commande PENDING la plus ancienne
-  String endpoint = String(SUPABASE_URL) + "/rest/v1/device_commands?status=eq.PENDING&order=created_at.asc&limit=1";
+  // Vos broches 18 et 19 avec pull-up
+  pinMode(SDA_PIN, INPUT_PULLUP);
+  pinMode(SCL_PIN, INPUT_PULLUP);
+  Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.setTimeOut(100);
 
-  http.begin(client, endpoint);
-  http.addHeader("apikey", SUPABASE_KEY);
-  http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
+  // Vérification de la présence du multiplexeur
+  Wire.beginTransmission(TCA_ADDR);
+  if (Wire.endTransmission() != 0) {
+    Serial.println("ERREUR : TCA9548A non detecte a l'adresse 0x70 ! Arret.");
+    while (1);
+  }
+  Serial.println("TCA9548A detecte.");
 
-  int httpCode = http.GET();
-  if (httpCode == 200) {
-    String payload = http.getString();
-    StaticJsonDocument<1024> doc;
-    DeserializationError error = deserializeJson(doc, payload);
+  // Test des canaux 0 a 2 : AHT20 + BMP280
+  for (uint8_t ch = 0; ch <= 2; ch++) {
+    selectTCAChannel(ch);
+    Serial.printf("\n[Canal %d] Test AHT20 + BMP280...\n", ch);
 
-    if (!error && doc.size() > 0) {
-      JsonObject cmdObj = doc[0];
-      const char* cmdId = cmdObj["id"];
-      const char* command = cmdObj["command"];
-      JsonObject params = cmdObj["payload"];
+    if (aht.begin()) {
+      Serial.printf("  -> AHT20 #%d : OK\n", ch + 1);
+    } else {
+      Serial.printf("  -> AHT20 #%d : NON DETECTE (0x38)\n", ch + 1);
+    }
 
-      Serial.printf("[Sécurité] Commande reçue : %s (ID: %s)\n", command, cmdId);
-
-      // Exécution matérielle avec Watchdog de sécurité
-      if (strcmp(command, "PUMP_OVERRIDE") == 0) {
-        int duration = params["duration_sec"] | 15;
-        if (duration > 120) duration = 120; // Garde-fou physique : max 2 minutes
-
-        Serial.printf("  -> Activation de la pompe pendant %d secondes...\n", duration);
-        digitalWrite(PIN_PUMP_RELAY, HIGH);
-        delay(duration * 1000);
-        digitalWrite(PIN_PUMP_RELAY, LOW);
-      }
-
-      // Marquer la commande comme EXECUTED
-      http.end();
-      String patchUrl = String(SUPABASE_URL) + "/rest/v1/device_commands?id=eq." + cmdId;
-      http.begin(client, patchUrl);
-      http.addHeader("Content-Type", "application/json");
-      http.addHeader("apikey", SUPABASE_KEY);
-      http.addHeader("Authorization", String("Bearer ") + SUPABASE_KEY);
-      http.PATCH("{\"status\":\"EXECUTED\"}");
+    if (bmp.begin(0x76) || bmp.begin(0x77)) {
+      Serial.printf("  -> BMP280 #%d : OK\n", ch + 1);
+    } else {
+      Serial.printf("  -> BMP280 #%d : NON DETECTE (0x76 / 0x77)\n", ch + 1);
     }
   }
-  http.end();
-}
 
-// ==============================================================================
-// BOUCLE PRINCIPALE (LOOP)
-// ==============================================================================
-void loop() {
-  connectWiFi();
+  // Test des canaux 4 a 7 : VEML7700
+  for (uint8_t ch = 4; ch <= 7; ch++) {
+    selectTCAChannel(ch);
+    Serial.printf("\n[Canal %d] Test VEML...\n", ch);
 
-  unsigned long currentMillis = millis();
-  if (currentMillis - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
-    lastTelemetryTime = currentMillis;
-
-    // 1. Lire tous les capteurs
-    readAllSensors();
-
-    // 2. Transmettre à Supabase (PostgreSQL)
-    sendTelemetryToSupabase();
-
-    // 3. Vérifier les ordres de contrôle signés par l'Admin
-    checkPendingCommands();
+    if (veml.begin()) {
+      Serial.printf("  -> VEML (sur SD%d) : OK\n", ch);
+      veml.setGain(VEML7700_GAIN_1);
+      veml.setIntegrationTime(VEML7700_IT_100MS);
+    } else {
+      Serial.printf("  -> VEML (sur SD%d) : NON DETECTE (0x10)\n", ch);
+    }
   }
 
-  delay(100);
+  // Scan et Connexion Wi-Fi
+  scanAvailableNetworks();
+  connectWiFi();
+
+  Serial.println("\n--- FIN DU CHECK MATERIEL, DEBUT DES LECTURES ---\n");
+  delay(1000);
+}
+
+void loop() {
+  Serial.println("=================================================");
+
+  // --- LECTURE DES CANAUX 0 A 2 (AHT20 + BMP280) ---
+  for (uint8_t ch = 0; ch <= 2; ch++) {
+    selectTCAChannel(ch);
+
+    sensors_event_t humidity, temp;
+    bool ahtOk = aht.getEvent(&humidity, &temp);
+    
+    // Essai de lecture BMP280
+    bool bmpOk = bmp.begin(0x76) || bmp.begin(0x77);
+
+    Serial.printf("[Canal %d] Module AHT+BMP #%d :\n", ch, ch + 1);
+
+    if (ahtOk) {
+      t_aht[ch] = temp.temperature;
+      h_aht[ch] = humidity.relative_humidity;
+      Serial.printf("   AHT20  | Temp: %.1f C | Hum: %.1f %%\n", temp.temperature, humidity.relative_humidity);
+    } else {
+      Serial.println("   AHT20  | Erreur de lecture");
+    }
+
+    if (bmpOk) {
+      t_bmp[ch] = bmp.readTemperature();
+      float rawP = bmp.readPressure() / 100.0F;
+      if (rawP < 850.0 && rawP > 600.0) rawP *= 1.33322;
+      p_bmp[ch] = rawP;
+      Serial.printf("   BMP280 | Temp: %.1f C | Pression: %.1f hPa\n", t_bmp[ch], p_bmp[ch]);
+    } else {
+      Serial.println("   BMP280 | Erreur de lecture");
+    }
+
+    vpd_val[ch] = calculateVPD(t_aht[ch], h_aht[ch], -1.5);
+  }
+
+  // --- LECTURE DES CANAUX 4 A 7 (VEML) ---
+  for (uint8_t ch = 4; ch <= 7; ch++) {
+    selectTCAChannel(ch);
+
+    Serial.printf("[Canal %d] VEML :\n", ch);
+    if (veml.begin()) {
+      veml.setGain(VEML7700_GAIN_1);
+      veml.setIntegrationTime(VEML7700_IT_100MS);
+      float lux = veml.readLux();
+      uint8_t idx = ch - 4;
+      lux_val[idx] = (isnan(lux) || lux < 0) ? 0.0 : lux;
+      ppfd_val[idx] = convertLuxToPPFD(lux_val[idx]);
+      Serial.printf("   Luminosite: %.2f Lux\n", lux_val[idx]);
+    } else {
+      Serial.println("   Erreur de lecture");
+    }
+  }
+
+  Serial.println("=================================================\n");
+
+  // Reconnexion Wi-Fi automatique si non connecté
+  if (WiFi.status() != WL_CONNECTED) {
+    static unsigned long lastWiFiRetry = 0;
+    if (millis() - lastWiFiRetry > 15000) {
+      lastWiFiRetry = millis();
+      Serial.println("[Wi-Fi] Non connecté. Nouvelle tentative de connexion...");
+      connectWiFi();
+    }
+  }
+
+  // Envoi périodique vers Supabase Cloud
+  unsigned long now = millis();
+  if (WiFi.status() == WL_CONNECTED && now - lastTelemetryTime >= TELEMETRY_INTERVAL_MS) {
+    lastTelemetryTime = now;
+    sendTelemetryToSupabase();
+  }
+
+  delay(3000); // Pause de 3 secondes entre chaque cycle
 }

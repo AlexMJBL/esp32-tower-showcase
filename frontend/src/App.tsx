@@ -90,8 +90,8 @@ function MainDashboard() {
   // Historique de télémétrie
   const [historyData, setHistoryData] = useState<TelemetryPoint[]>(generateSeedHistory());
 
-  // États de l'UI
-  const [connectionState, setConnectionState] = useState<'Connecting' | 'Connected' | 'Live Showcase'>(isConfigured ? 'Connected' : 'Live Showcase');
+  // Indique si de vraies données ont été reçues de l'ESP32 via Supabase
+  const [isLiveFromEsp32, setIsLiveFromEsp32] = useState<boolean>(false);
   const [mqttLogs, setMqttLogs] = useState<{ id: string; time: string; text: string; type: 'sensor' | 'command' | 'sys' }[]>([]);
 
   // Utilitaire d'ajout de log
@@ -156,6 +156,7 @@ function MainDashboard() {
         .limit(30)
         .then(({ data, error }) => {
           if (!error && data && data.length > 0) {
+            setIsLiveFromEsp32(true);
             const latest = data[0] as TelemetryPoint;
             setZoneReadings([
               { channel: 0, label: 'Étage 1 (Zone Basse / Racines)', ahtTemp: latest.t0, ahtHum: latest.h0, bmpTemp: latest.t0 + 0.8, pressure: latest.p0 },
@@ -169,10 +170,14 @@ function MainDashboard() {
               { channel: 7, label: 'Étage 1 (Bas)', lux: latest.lux7 },
             ]);
             setHistoryData(data.slice().reverse() as TelemetryPoint[]);
-            setConnectionState('Connected');
             addLog(language === 'fr' 
               ? `Télémétrie Cloud synchronisée (VPD=${latest.vpd0} kPa).` 
               : `Cloud telemetry synced (VPD=${latest.vpd0} kPa).`, 'sensor');
+          } else {
+            setIsLiveFromEsp32(false);
+            addLog(language === 'fr'
+              ? "Base Cloud connectée · En attente du premier paquet de l'ESP32 (Affichage des données de prévisualisation)."
+              : "Cloud connected · Waiting for first ESP32 packet (Displaying preview baseline data).", 'sys');
           }
         });
 
@@ -184,6 +189,7 @@ function MainDashboard() {
           { event: 'INSERT', schema: 'public', table: 'sensor_telemetry' },
           (payload) => {
             const row = payload.new as TelemetryPoint;
+            setIsLiveFromEsp32(true);
             setZoneReadings([
               { channel: 0, label: 'Étage 1 (Zone Basse / Racines)', ahtTemp: row.t0, ahtHum: row.h0, bmpTemp: row.t0 + 0.8, pressure: row.p0 },
               { channel: 1, label: 'Étage 2 (Zone Médiane)',     ahtTemp: row.t1, ahtHum: row.h1, bmpTemp: row.t1 + 0.9, pressure: row.p1 },
@@ -197,9 +203,8 @@ function MainDashboard() {
             ]);
             setHistoryData(prev => [...prev.slice(1), row]);
             addLog(language === 'fr' 
-              ? `Mesures en direct : Confort=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`
-              : `Live readings: VPD=${row.vpd0} kPa, Top Lux=${row.lux4} Lux`, 'sensor');
-            setConnectionState('Connected');
+              ? `Mesures reçues en direct de l'ESP32 : VPD=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`
+              : `Live readings from ESP32: VPD=${row.vpd0} kPa, Top Lux=${row.lux4} Lux`, 'sensor');
           }
         )
         .subscribe();
@@ -243,11 +248,23 @@ function MainDashboard() {
           </div>
 
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300">
-              <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
-              <span className="font-medium">
-                {connectionState === 'Live Showcase' ? t.nav.showcaseBadge : connectionState}
-              </span>
+            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800">
+              <Radio className={`w-3 h-3 ${isLiveFromEsp32 ? 'text-emerald-400' : 'text-amber-400'} animate-pulse`} />
+              {isLiveFromEsp32 ? (
+                <>
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                  <span className="font-semibold text-emerald-400">
+                    {language === 'fr' ? 'ESP32 En Direct (Cloud)' : 'ESP32 Live (Cloud)'}
+                  </span>
+                </>
+              ) : (
+                <span className="font-medium text-amber-300">
+                  {language === 'fr' ? 'En attente ESP32 (Mode Démo)' : 'Waiting for ESP32 (Demo Mode)'}
+                </span>
+              )}
             </div>
             <span className="hidden md:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-slate-300 font-medium text-[11px]">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
@@ -400,7 +417,25 @@ function MainDashboard() {
           </button>
         </div>
       </header>
-
+ 
+      {/* BANNIÈRE D'INFORMATION MODE DÉMO TANT QUE L'ESP32 N'A PAS ÉMIS */}
+      {!isLiveFromEsp32 && (
+        <div className="bg-amber-950/40 border-b border-amber-500/25 px-4 py-2 text-amber-200">
+          <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+              <span>
+                {language === 'fr' 
+                  ? "Mode Démonstration actif : Les chiffres affichés sont des données de référence. Dès que votre ESP32 se connectera au Wi-Fi, vos vraies mesures en direct s'afficheront ici automatiquement."
+                  : "Demo Baseline Mode: The values shown are preview numbers. As soon as your ESP32 connects to Wi-Fi, your live sensor readings will appear here automatically."}
+              </span>
+            </div>
+            <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono font-medium">
+              Supabase : 0 paquet reçu
+            </span>
+          </div>
+        </div>
+      )}
       {/* CONTENU PRINCIPAL */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
 
