@@ -13,7 +13,7 @@
 #define SCL_PIN 19
 
 // Vos identifiants Wi-Fi (Point d'accès cellulaire)
-String activeSSID          = "juicewrld 2";
+String activeSSID          = "JuiceWrld2";
 const char* WIFI_PASSWORD = "Tesjulie1992";
 
 // Clés d'accès Supabase Cloud
@@ -80,7 +80,6 @@ const char* getAuthModeName(wifi_auth_mode_t authMode) {
     case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2 Mixte";
     case WIFI_AUTH_WPA2_ENTERPRISE: return "WPA2-Enterprise";
     case WIFI_AUTH_WPA3_PSK: return "WPA3-PSK (Incompatible ESP32 pur !)";
-    case WIFI_AUTH_WPA2_WPA3_PSK: return "WPA2/WPA3 Transition";
     default: return "Inconnu";
   }
 }
@@ -101,18 +100,23 @@ void scanAvailableNetworks() {
       wifi_auth_mode_t auth = WiFi.encryptionType(i);
       Serial.printf("     * SSID: %-22s | Canal: %2d | Signal: %3d dBm | Sécurité: %s\n", 
                     s.c_str(), ch, r, getAuthModeName(auth));
-      if (s.equalsIgnoreCase(activeSSID) || 
-          (s.indexOf("juice") >= 0 && s.indexOf("2") >= 0) || 
-          (s.indexOf("Juice") >= 0 && s.indexOf("2") >= 0)) {
+
+      String sClean = s;
+      sClean.toLowerCase();
+      sClean.replace(" ", "");
+      if (sClean == "juicewrld2" || sClean == "juicewrld" || sClean.indexOf("juicewrld") >= 0) {
         foundTarget = true;
-        activeSSID = s; // Capture le nom exact émis par le téléphone
-        Serial.printf("       >>> POINT D'ACCÈS DU CELLULAIRE IDENTIFIÉ : '%s' (%d dBm)\n", activeSSID.c_str(), r);
+        activeSSID = s; // Capture le nom EXACT (avec ou sans espace) émis par le téléphone
+        Serial.printf("       >>> POINT D'ACCÈS IDENTIFIÉ : '%s' (%d dBm, Ch %d)\n", activeSSID.c_str(), r, ch);
       }
     }
     if (foundTarget) {
-      Serial.printf("  [OK] Votre cellulaire '%s' est bien présent à portée en 2.4 GHz !\n", activeSSID.c_str());
+      Serial.printf("  [OK] Votre point d'accès '%s' est bien présent à portée en 2.4 GHz !\n", activeSSID.c_str());
     } else {
-      Serial.printf("  [ALERTE] '%s' est introuvable. Vérifiez que le point d'accès Wi-Fi est actif sur le téléphone.\n", activeSSID.c_str());
+      Serial.printf("  [ALERTE] '%s' est introuvable en 2.4 GHz !\n", activeSSID.c_str());
+      Serial.println("  -> Si iPhone : Activez 'Maximiser la compatibilité' dans Réglages > Partage de connexion.");
+      Serial.println("  -> Si Android : Configurez le point d'accès sur la bande 2.4 GHz (pas 5 GHz).");
+      Serial.println("  -> Gardez l'écran du Partage de connexion ouvert sur le téléphone.");
     }
   }
 }
@@ -129,7 +133,7 @@ void connectWiFi() {
   delay(250);
   WiFi.setSleep(false);
 
-  Serial.printf("\n[Wi-Fi] Connexion au point d'accès cellulaire '%s' (MAC ESP32: %s)...\n", activeSSID.c_str(), WiFi.macAddress().c_str());
+  Serial.printf("\n[Wi-Fi] Connexion au réseau '%s' (MAC ESP32: %s)...\n", activeSSID.c_str(), WiFi.macAddress().c_str());
   WiFi.begin(activeSSID.c_str(), WIFI_PASSWORD);
 
   unsigned long startAttempt = millis();
@@ -324,13 +328,15 @@ void loop() {
 
   Serial.println("=================================================\n");
 
-  // Reconnexion Wi-Fi automatique si non connecté
+  // Reconnexion Wi-Fi automatique propre si non connecté
   if (WiFi.status() != WL_CONNECTED) {
     static unsigned long lastWiFiRetry = 0;
-    if (millis() - lastWiFiRetry > 20000) {
+    if (millis() - lastWiFiRetry > 25000) {
       lastWiFiRetry = millis();
-      Serial.println("[Wi-Fi] Non connecté. Tentative de reconnexion...");
-      WiFi.reconnect();
+      Serial.println("[Wi-Fi] Non connecté. Nouvelle tentative vers le cellulaire...");
+      WiFi.disconnect(true);
+      delay(150);
+      WiFi.begin(activeSSID.c_str(), WIFI_PASSWORD);
     }
   }
 
