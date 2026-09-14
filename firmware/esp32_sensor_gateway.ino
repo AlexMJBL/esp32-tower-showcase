@@ -12,8 +12,8 @@
 #define SDA_PIN 18
 #define SCL_PIN 19
 
-// Vos identifiants Wi-Fi (Réseau principal WPA2-Personal)
-const char* WIFI_SSID     = "JuiceWrld";
+// Vos identifiants Wi-Fi (Point d'accès cellulaire)
+String activeSSID          = "juicewrld 2";
 const char* WIFI_PASSWORD = "Tesjulie1992";
 
 // Clés d'accès Supabase Cloud
@@ -101,28 +101,27 @@ void scanAvailableNetworks() {
       wifi_auth_mode_t auth = WiFi.encryptionType(i);
       Serial.printf("     * SSID: %-22s | Canal: %2d | Signal: %3d dBm | Sécurité: %s\n", 
                     s.c_str(), ch, r, getAuthModeName(auth));
-      if (s.equalsIgnoreCase(WIFI_SSID)) {
+      if (s.equalsIgnoreCase(activeSSID) || 
+          (s.indexOf("juice") >= 0 && s.indexOf("2") >= 0) || 
+          (s.indexOf("Juice") >= 0 && s.indexOf("2") >= 0)) {
         foundTarget = true;
-        if (auth == WIFI_AUTH_WPA3_PSK) {
-          Serial.printf("       >>> ATTENTION : '%s' est configuré en WPA3 strict ! L'ESP32 nécessite WPA2-PSK.\n", WIFI_SSID);
-        }
+        activeSSID = s; // Capture le nom exact émis par le téléphone
+        Serial.printf("       >>> POINT D'ACCÈS DU CELLULAIRE IDENTIFIÉ : '%s' (%d dBm)\n", activeSSID.c_str(), r);
       }
     }
     if (foundTarget) {
-      Serial.printf("  [OK] Votre réseau '%s' est bien présent en 2.4 GHz !\n", WIFI_SSID);
+      Serial.printf("  [OK] Votre cellulaire '%s' est bien présent à portée en 2.4 GHz !\n", activeSSID.c_str());
     } else {
-      Serial.printf("  [ALERTE CRITIQUE] '%s' est TOTALEMENT INTROUVABLE en 2.4 GHz !\n", WIFI_SSID);
-      Serial.println("  Cause n°1 : Votre routeur diffuse en 5 GHz uniquement (l'ESP32 ne capte QUE le 2.4 GHz).");
-      Serial.println("  Solution  : Activez la bande 2.4 GHz dans l'interface de votre box/routeur.");
+      Serial.printf("  [ALERTE] '%s' est introuvable. Vérifiez que le point d'accès Wi-Fi est actif sur le téléphone.\n", activeSSID.c_str());
     }
   }
 }
 
-// Connexion Wi-Fi avec réinitialisation propre
+// Connexion Wi-Fi avec réinitialisation propre vers le cellulaire
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
 
-  // Réinitialisation complète du pilote pour éviter "sta is connecting, cannot set config"
+  // Réinitialisation propre du contrôleur radio
   WiFi.disconnect(true, true);
   WiFi.mode(WIFI_OFF);
   delay(250);
@@ -130,8 +129,8 @@ void connectWiFi() {
   delay(250);
   WiFi.setSleep(false);
 
-  Serial.printf("\n[Wi-Fi] Connexion au réseau '%s' (MAC ESP32: %s)...\n", WIFI_SSID, WiFi.macAddress().c_str());
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.printf("\n[Wi-Fi] Connexion au point d'accès cellulaire '%s' (MAC ESP32: %s)...\n", activeSSID.c_str(), WiFi.macAddress().c_str());
+  WiFi.begin(activeSSID.c_str(), WIFI_PASSWORD);
 
   unsigned long startAttempt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 20000) {
@@ -139,47 +138,21 @@ void connectWiFi() {
     Serial.print(".");
   }
 
-  // Secours pour les modems Hitron / Fizz si le serveur DHCP tarde à attribuer l'IP :
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("\n[Wi-Fi] DHCP lent ou bloqué sur la box. Essai avec IP fixe directe (192.168.0.195)...");
-    WiFi.disconnect(true);
-    delay(300);
-
-    IPAddress local_IP(192, 168, 0, 195);
-    IPAddress gateway(192, 168, 0, 1);
-    IPAddress subnet(255, 255, 255, 0);
-    IPAddress dns1(192, 168, 0, 1);
-    IPAddress dns2(8, 8, 8, 8);
-
-    WiFi.config(local_IP, gateway, subnet, dns1, dns2);
-    delay(150);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-    unsigned long retryStart = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - retryStart < 12000) {
-      delay(500);
-      Serial.print(".");
-    }
-  }
-
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.printf("\n[Wi-Fi] Connecté avec succès ! IP locale : %s | Signal : %d dBm\n", 
+    Serial.printf("\n[Wi-Fi] Connecté avec succès au cellulaire ! IP locale : %s | Signal : %d dBm\n", 
                   WiFi.localIP().toString().c_str(), WiFi.RSSI());
   } else {
     wl_status_t st = WiFi.status();
     Serial.print("\n[Wi-Fi Échec] ");
     switch (st) {
       case WL_NO_SSID_AVAIL:
-        Serial.printf("SSID INTROUVABLE ! L'antenne de l'ESP32 ne capte pas '%s'.\n", WIFI_SSID);
+        Serial.printf("SSID INTROUVABLE ! L'antenne de l'ESP32 ne capte pas '%s'.\n", activeSSID.c_str());
         break;
       case WL_CONNECT_FAILED:
-        Serial.println("ÉCHEC AUTHENTIFICATION ! Mot de passe refusé par le routeur.");
+        Serial.println("ÉCHEC AUTHENTIFICATION ! Mot de passe refusé par le cellulaire.");
         break;
       case WL_DISCONNECTED:
-        Serial.println("DÉCONNECTÉ (Délai d'attente dépassé ou rejet par le routeur).");
-        break;
-      case WL_IDLE_STATUS:
-        Serial.println("STATUT EN ATTENTE (La négociation avec le routeur n'a pas abouti).");
+        Serial.println("DÉCONNECTÉ (Délai d'attente dépassé).");
         break;
       default:
         Serial.printf("Code d'état : %d\n", st);
