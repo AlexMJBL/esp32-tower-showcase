@@ -22,12 +22,6 @@ import {
   Radio
 } from 'lucide-react';
 
-interface PumpDto {
-  isActive: boolean;
-  openDurationSeconds: number;
-  openIntervalMinutes: number;
-}
-
 const BACKEND_URL = 'http://localhost:5013';
 
 // Générateur de faux historique pour le mode showcase en ligne si Supabase n'est pas encore connecté
@@ -75,9 +69,6 @@ export function App() {
   const [activeTab, setActiveTab] = useState<'live' | 'history' | 'controls' | 'logs'>('live');
   const [timeRange, setTimeRange] = useState<'1h' | '6h' | '24h' | '7d'>('24h');
 
-  // Configuration prévisionnelle de l'irrigation
-  const [pump] = useState<PumpDto>({ isActive: false, openDurationSeconds: 60, openIntervalMinutes: 15 });
-  
   // États des capteurs réels (Initialisés avec la trame fournie par l'utilisateur !)
   const [zoneReadings, setZoneReadings] = useState<ZoneSensorReading[]>([
     { channel: 0, label: 'Étage 1 (Zone Basse / Racines)', ahtTemp: 26.8, ahtHum: 60.7, bmpTemp: 27.6, pressure: 1003.5 },
@@ -369,10 +360,7 @@ export function App() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <PumpControlCard 
-                openDurationSeconds={pump.openDurationSeconds}
-                openIntervalMinutes={pump.openIntervalMinutes}
-              />
+              <PumpControlCard isRunning={true} />
               <LightControlCard />
             </div>
           </div>
