@@ -5,8 +5,14 @@
 #include <Adafruit_AHTX0.h>
 #include <Adafruit_BMP280.h>
 #include <Adafruit_VEML7700.h>
+#include <esp_wifi.h>
 
 #define TCA_ADDR 0x70
+
+// Verrouillage matériel BSSID pour contourner le Band Steering des box modernes
+uint8_t targetBSSID[6] = {0};
+bool targetBSSIDFound = false;
+int targetChannel = 11;
 
 // Vos broches I2C physiques exactes
 #define SDA_PIN 18
@@ -103,6 +109,14 @@ void scanAvailableNetworks() {
                     s.c_str(), ch, r, getAuthModeName(auth));
       if (s.equalsIgnoreCase(WIFI_SSID)) {
         foundTarget = true;
+        targetBSSIDFound = true;
+        targetChannel = ch;
+        const uint8_t* bssid = WiFi.BSSID(i);
+        if (bssid != nullptr) {
+          memcpy(targetBSSID, bssid, 6);
+          Serial.printf("       -> BSSID physique 2.4GHz : %02X:%02X:%02X:%02X:%02X:%02X (Verrouillage matériel activé)\n",
+                        targetBSSID[0], targetBSSID[1], targetBSSID[2], targetBSSID[3], targetBSSID[4], targetBSSID[5]);
+        }
         if (auth == WIFI_AUTH_WPA3_PSK) {
           Serial.println("       >>> ATTENTION : 'JuiceWrld' est configuré en WPA3 strict ! L'ESP32 nécessite WPA2-PSK.");
         }
@@ -175,10 +189,17 @@ void connectWiFi() {
   WiFi.setSleep(false);
   WiFi.setAutoReconnect(true);
 
+  // Forcer la bande passante 20MHz (HT20) pour compatibilité maximale avec les box Wi-Fi 6 / Mesh
+  esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT20);
+
   Serial.printf("\n[Wi-Fi] Connexion au réseau '%s' (MAC ESP32: %s)...\n", WIFI_SSID, WiFi.macAddress().c_str());
   
-  // Connexion (Canal 11 détecté lors du scan pour accélérer l'association)
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD, 11);
+  if (targetBSSIDFound) {
+    Serial.printf("  -> Verrouillage sur l'antenne BSSID 2.4 GHz exacte (Canal %d) pour contourner le rejet...\n", targetChannel);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD, targetChannel, targetBSSID);
+  } else {
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  }
 
   unsigned long startAttempt = millis();
   while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 20000) {
