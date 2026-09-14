@@ -12,9 +12,9 @@
 #define SDA_PIN 18
 #define SCL_PIN 19
 
-// Vos identifiants Wi-Fi
-const char* WIFI_SSID     = "JuiceWrld-IOT";
-const char* WIFI_PASSWORD = "#Crz132!";
+// Vos identifiants Wi-Fi (Réseau principal WPA2-Personal)
+const char* WIFI_SSID     = "JuiceWrld";
+const char* WIFI_PASSWORD = "Tesjulie1992";
 
 // Clés d'accès Supabase Cloud
 const char* SUPABASE_URL  = "https://dulwyxrcjskexkbewjcp.supabase.co";
@@ -137,6 +137,25 @@ void connectWiFi() {
   while (WiFi.status() != WL_CONNECTED && millis() - startAttempt < 20000) {
     delay(500);
     Serial.print(".");
+  }
+
+  // Secours pour les modems Hitron / Fizz si le serveur DHCP tarde à attribuer l'IP :
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("\n[Wi-Fi] DHCP lent ou bloqué sur la box. Essai avec IP fixe directe (192.168.0.195)...");
+    IPAddress local_IP(192, 168, 0, 195);
+    IPAddress gateway(192, 168, 0, 1);
+    IPAddress subnet(255, 255, 255, 0);
+    IPAddress dns1(192, 168, 0, 1);
+    IPAddress dns2(8, 8, 8, 8);
+
+    WiFi.config(local_IP, gateway, subnet, dns1, dns2);
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    unsigned long retryStart = millis();
+    while (WiFi.status() != WL_CONNECTED && millis() - retryStart < 12000) {
+      delay(500);
+      Serial.print(".");
+    }
   }
 
   if (WiFi.status() == WL_CONNECTED) {
