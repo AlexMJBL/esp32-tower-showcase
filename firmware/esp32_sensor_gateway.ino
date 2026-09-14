@@ -29,13 +29,15 @@
 #include <Adafruit_BMP280.h>
 #include <Adafruit_VEML7700.h>
 
-// 1. CONFIGURATION WI-FI & SUPABASE
-const char* WIFI_SSID     = "VOTRE_WIFI_SSID";
-const char* WIFI_PASSWORD = "VOTRE_WIFI_PASSWORD";
-
-// URL et clé Anon de votre projet Supabase (Dashboard -> Settings -> API)
-const char* SUPABASE_URL  = "https://votre-projet.supabase.co";
-const char* SUPABASE_KEY  = "votre-cle-anon-publique-ou-service-role";
+// 1. CONFIGURATION WI-FI & SUPABASE (Charge automatiquement credentials.h local si présent)
+#if __has_include("credentials.h")
+  #include "credentials.h"
+#else
+  const char* WIFI_SSID     = "VOTRE_WIFI_SSID";
+  const char* WIFI_PASSWORD = "VOTRE_WIFI_PASSWORD";
+  const char* SUPABASE_URL  = "https://votre-projet.supabase.co";
+  const char* SUPABASE_KEY  = "votre-cle-anon-publique";
+#endif
 
 // Identifiant de l'appareil
 const char* DEVICE_ID     = "esp32-tower-1";
