@@ -146,7 +146,37 @@ function MainDashboard() {
   // Synchronisation Supabase ou Simulation Live
   useEffect(() => {
     if (isConfigured) {
-      addLog(language === 'fr' ? "Synchronisation temps réel connectée." : "Realtime sync connected.", "sys");
+      addLog(language === 'fr' ? "Connexion au Cloud Supabase..." : "Connecting to Supabase Cloud...", "sys");
+
+      // 1. Récupération des dernières mesures enregistrées
+      supabase
+        .from('sensor_telemetry')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(30)
+        .then(({ data, error }) => {
+          if (!error && data && data.length > 0) {
+            const latest = data[0] as TelemetryPoint;
+            setZoneReadings([
+              { channel: 0, label: 'Étage 1 (Zone Basse / Racines)', ahtTemp: latest.t0, ahtHum: latest.h0, bmpTemp: latest.t0 + 0.8, pressure: latest.p0 },
+              { channel: 1, label: 'Étage 2 (Zone Médiane)',     ahtTemp: latest.t1, ahtHum: latest.h1, bmpTemp: latest.t1 + 0.9, pressure: latest.p1 },
+              { channel: 2, label: 'Étage 3 (Canopée Supérieure)', ahtTemp: latest.t2, ahtHum: latest.h2, bmpTemp: latest.t2 + 0.7, pressure: latest.p2 },
+            ]);
+            setLightSensors([
+              { channel: 4, label: 'Étage 4 (Sommet)', lux: latest.lux4 },
+              { channel: 5, label: 'Étage 3 (Haut)', lux: latest.lux5 },
+              { channel: 6, label: 'Étage 2 (Milieu)', lux: latest.lux6 },
+              { channel: 7, label: 'Étage 1 (Bas)', lux: latest.lux7 },
+            ]);
+            setHistoryData(data.slice().reverse() as TelemetryPoint[]);
+            setConnectionState('Connected');
+            addLog(language === 'fr' 
+              ? `Télémétrie Cloud synchronisée (VPD=${latest.vpd0} kPa).` 
+              : `Cloud telemetry synced (VPD=${latest.vpd0} kPa).`, 'sensor');
+          }
+        });
+
+      // 2. Écoute en direct des nouveaux relevés (Realtime WebSocket)
       const channel = supabase
         .channel('live-telemetry')
         .on(
@@ -167,8 +197,8 @@ function MainDashboard() {
             ]);
             setHistoryData(prev => [...prev.slice(1), row]);
             addLog(language === 'fr' 
-              ? `Nouvelles mesures reçues : Confort=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`
-              : `New readings received: VPD=${row.vpd0} kPa, Top Lux=${row.lux4} Lux`, 'sensor');
+              ? `Mesures en direct : Confort=${row.vpd0} kPa, Lumière sommet=${row.lux4} Lux`
+              : `Live readings: VPD=${row.vpd0} kPa, Top Lux=${row.lux4} Lux`, 'sensor');
             setConnectionState('Connected');
           }
         )
