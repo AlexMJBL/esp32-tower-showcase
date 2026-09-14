@@ -118,9 +118,53 @@ void scanAvailableNetworks() {
   }
 }
 
+#ifdef ARDUINO_EVENT_WIFI_STA_DISCONNECTED
+  #define EVT_STA_CONNECTED ARDUINO_EVENT_WIFI_STA_CONNECTED
+  #define EVT_STA_GOT_IP ARDUINO_EVENT_WIFI_STA_GOT_IP
+  #define EVT_STA_DISCONNECTED ARDUINO_EVENT_WIFI_STA_DISCONNECTED
+#else
+  #define EVT_STA_CONNECTED SYSTEM_EVENT_STA_CONNECTED
+  #define EVT_STA_GOT_IP SYSTEM_EVENT_STA_GOT_IP
+  #define EVT_STA_DISCONNECTED SYSTEM_EVENT_STA_DISCONNECTED
+#endif
+
 // Connexion Wi-Fi avec diagnostic précis
 void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) return;
+
+  static bool eventRegistered = false;
+  if (!eventRegistered) {
+    eventRegistered = true;
+    WiFi.onEvent([](WiFiEvent_t event, WiFiEventInfo_t info) {
+      if (event == EVT_STA_CONNECTED) {
+        Serial.println("\n  [Event Wi-Fi] -> Association radio réussie avec la box ! Négociation IP (DHCP) en cours...");
+      } else if (event == EVT_STA_GOT_IP) {
+        Serial.printf("\n  [Event Wi-Fi] -> Succès ! IP attribuée : %s\n", IPAddress(info.got_ip.ip_info.ip.addr).toString().c_str());
+      } else if (event == EVT_STA_DISCONNECTED) {
+        uint8_t reason = info.wifi_sta_disconnected.reason;
+        Serial.printf("\n  [Event Wi-Fi] -> Déconnecté par la box (Code raison 802.11 : %d) : ", reason);
+        switch (reason) {
+          case 2:
+            Serial.println("AUTH_EXPIRE (La box a coupé l'authentification - Band Steering ou signal)");
+            break;
+          case 15:
+          case 202:
+          case 204:
+            Serial.println("MOT DE PASSE REFUSÉ ! Le routeur indique que le mot de passe est incorrect (vérifiez majuscules/minuscules).");
+            break;
+          case 200:
+            Serial.println("BEACON_TIMEOUT (Signal perdu)");
+            break;
+          case 205:
+            Serial.println("ASSOC_FAIL (Rejet par la box : vérifiez si le filtrage MAC / contrôle parental bloque l'ESP32)");
+            break;
+          default:
+            Serial.println("Interruption.");
+            break;
+        }
+      }
+    });
+  }
 
   WiFi.disconnect();
   delay(100);
@@ -150,10 +194,10 @@ void connectWiFi() {
     Serial.print("\n[Wi-Fi Échec] ");
     switch (st) {
       case WL_NO_SSID_AVAIL:
-        Serial.println("SSID INTROUVABLE ! L'antenne de l'ESP32 ne capte pas 'JuiceWrld' (Vérifiez que la bande 2.4 GHz est activée sur la box).");
+        Serial.println("SSID INTROUVABLE ! L'antenne de l'ESP32 ne capte pas 'JuiceWrld'.");
         break;
       case WL_CONNECT_FAILED:
-        Serial.println("ÉCHEC AUTHENTIFICATION ! Mot de passe refusé ou cryptage WPA3 incompatible (Basculez en WPA2-PSK dans la box).");
+        Serial.println("ÉCHEC AUTHENTIFICATION ! Mot de passe refusé par le routeur.");
         break;
       case WL_DISCONNECTED:
         Serial.println("DÉCONNECTÉ (Délai d'attente dépassé ou rejet par le routeur).");
